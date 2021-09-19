@@ -441,8 +441,9 @@ if(g6) {
 	project.addDefine('KORE_G5ONG6');
 	addBackend('Graphics5/G5onG6');
 } else {
-	project.addDefine('KORE_G6');
-	project.addDefine('KORE_G6ONG5');
+	// project.addDefine('KORE_G6');
+	// project.addDefine('KORE_G6ONG5');
+	project.addExclude('Sources/kinc/graphics6')
 	// addBackend('Graphics6/G6onG5');
 }
 

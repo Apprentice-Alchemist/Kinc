@@ -472,3 +472,7 @@ void kinc_g6_present(kinc_g6_swapchain_t *swapchain) {
 		CHECK(r);
 	}
 }
+
+bool kinc_window_vsynced() {
+	return true;
+}
