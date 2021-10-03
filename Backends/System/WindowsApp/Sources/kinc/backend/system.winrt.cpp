@@ -1,5 +1,4 @@
-#include <kinc/backend/graphics4/Direct3D11.h>
-
+#include <kinc/graphics4/graphics.h>
 #include <kinc/input/gamepad.h>
 #include <kinc/input/keyboard.h>
 #include <kinc/input/mouse.h>
@@ -7,8 +6,6 @@
 #include <kinc/threads/thread.h>
 #include <kinc/video.h>
 #include <kinc/window.h>
-
-#include <kinc/backend/Hololens.winrt.h>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -25,6 +22,25 @@
 #if XINPUT
 #include <Xinput.h>
 #endif
+
+#include <d3d11_1.h>
+#include <d3d11_4.h>
+#include <dxgi1_5.h>
+#include <wrl.h>
+
+#ifdef KORE_WINDOWSAPP
+using namespace ::Microsoft::WRL;
+using namespace Windows::UI::Core;
+using namespace Windows::Foundation;
+#ifdef KORE_HOLOLENS
+using namespace Windows::Graphics::Holographic;
+using namespace Windows::Graphics::DirectX::Direct3D11;
+#endif
+#endif
+
+extern "C" IUnknown *kinc_winapp_internal_get_window(void) {
+	return reinterpret_cast<IUnknown *>(CoreWindow::GetForCurrentThread());
+}
 
 extern "C" void kinc_internal_uwp_installed_location_path(char *path) {
 	Platform::String ^ locationString = Windows::ApplicationModel::Package::Current->InstalledLocation->Path;
@@ -198,8 +214,8 @@ const char *kinc_language() {
 	return "en";
 }
 
-extern int renderTargetWidth;
-extern int renderTargetHeight;
+extern "C" int renderTargetWidth;
+extern "C" int renderTargetHeight;
 
 Win8Application::Win8Application() : closed(false) {}
 
