@@ -67,6 +67,7 @@ if (platform === Platform.Windows) {
 	project.addIncludeDir('Backends/System/Windows/Libraries/DirectShow/BaseClasses');
 	project.addLib('strmiids');
 	project.addLib('winmm');
+	project.addLib('wbemuuid');
 
 	if (graphics === GraphicsApi.OpenGL1) {
 		addBackend('Graphics3/OpenGL1');
