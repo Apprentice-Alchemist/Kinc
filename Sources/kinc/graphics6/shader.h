@@ -26,7 +26,7 @@ typedef struct kinc_g6_shader {
 typedef struct kinc_g6_shader_descriptor {
 	kinc_g6_shader_stage_t stage;
 	const void *code;
-	uint32_t code_size;
+	size_t code_size;
 } kinc_g6_shader_descriptor_t;
 
 KINC_FUNC void kinc_g6_shader_init(kinc_g6_shader_t *shader, const kinc_g6_shader_descriptor_t *descriptor);

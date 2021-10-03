@@ -49,7 +49,7 @@ void kinc_g6_bind_group_layout_init(kinc_g6_bind_group_layout_t *layout, const k
 	}
 	create_info.pBindings = bindings;
 	layout->impl.count = descriptor->entry_count;
-	vkCreateDescriptorSetLayout(context.device, &create_info, NULL, layout->impl.layout);
+	vkCreateDescriptorSetLayout(context.device, &create_info, NULL, &layout->impl.layout);
 }
 
 void kinc_g6_bind_group_layout_destroy(kinc_g6_bind_group_layout_t *layout) {
@@ -60,7 +60,7 @@ void kinc_g6_bind_group_init(kinc_g6_bind_group_t *group, const kinc_g6_bind_gro
 	VkDescriptorSetAllocateInfo alloc_info = {0};
 	alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	alloc_info.pNext = NULL;
-	alloc_info.descriptorPool = NULL;
+	alloc_info.descriptorPool = context.descriptor_pool;
 	alloc_info.descriptorSetCount = 1;
 	alloc_info.pSetLayouts = &descriptor->layout->impl.layout;
 	vkAllocateDescriptorSets(context.device, &alloc_info, &group->impl.set);
@@ -72,7 +72,8 @@ void kinc_g6_bind_group_init(kinc_g6_bind_group_t *group, const kinc_g6_bind_gro
 		write_sets[i].dstSet = group->impl.set;
 		write_sets[i].dstBinding = descriptor->entries[i].binding;
 		write_sets[i].descriptorCount = 1;
-		write_sets[i].descriptorType = convert_binding_type(descriptor->layout->impl.types[i].type);
+		write_sets[i].descriptorType = descriptor->layout->impl.types[i].type;
+		write_sets[i].dstArrayElement = 0;
 		switch (descriptor->layout->impl.types[i].type) {
 		case VK_DESCRIPTOR_TYPE_SAMPLER:
 			write_sets[i].pImageInfo = &(VkDescriptorImageInfo){.sampler = descriptor->entries[i].sampler};
@@ -85,26 +86,30 @@ void kinc_g6_bind_group_init(kinc_g6_bind_group_t *group, const kinc_g6_bind_gro
 			write_sets[i].pImageInfo = &(VkDescriptorImageInfo){.imageView = descriptor->entries[i].texture->impl.view, .imageLayout = VK_IMAGE_LAYOUT_GENERAL};
 			break;
 		case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-			write_sets[i].pBufferInfo = &(VkDescriptorBufferInfo){
-			    .buffer = descriptor->entries[i].buffer.buffer, .offset = descriptor->entries[i].buffer.offset, .range = descriptor->entries[i].buffer.size};
+			write_sets[i].pBufferInfo = &(VkDescriptorBufferInfo){.buffer = descriptor->entries[i].buffer.buffer->impl.buffer,
+			                                                      .offset = descriptor->entries[i].buffer.offset,
+			                                                      .range = descriptor->entries[i].buffer.size};
 			break;
 		case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-			write_sets[i].pBufferInfo = &(VkDescriptorBufferInfo){
-			    .buffer = descriptor->entries[i].buffer.buffer, .offset = descriptor->entries[i].buffer.offset, .range = descriptor->entries[i].buffer.size};
+			write_sets[i].pBufferInfo = &(VkDescriptorBufferInfo){.buffer = descriptor->entries[i].buffer.buffer->impl.buffer,
+			                                                      .offset = descriptor->entries[i].buffer.offset,
+			                                                      .range = descriptor->entries[i].buffer.size};
 			break;
 		case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
-			write_sets[i].pBufferInfo = &(VkDescriptorBufferInfo){
-			    .buffer = descriptor->entries[i].buffer.buffer, .offset = descriptor->entries[i].buffer.offset, .range = descriptor->entries[i].buffer.size};
+			write_sets[i].pBufferInfo = &(VkDescriptorBufferInfo){.buffer = descriptor->entries[i].buffer.buffer->impl.buffer,
+			                                                      .offset = descriptor->entries[i].buffer.offset,
+			                                                      .range = descriptor->entries[i].buffer.size};
 			break;
 		case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
-			write_sets[i].pBufferInfo = &(VkDescriptorBufferInfo){
-			    .buffer = descriptor->entries[i].buffer.buffer, .offset = descriptor->entries[i].buffer.offset, .range = descriptor->entries[i].buffer.size};
+			write_sets[i].pBufferInfo = &(VkDescriptorBufferInfo){.buffer = descriptor->entries[i].buffer.buffer->impl.buffer,
+			                                                      .offset = descriptor->entries[i].buffer.offset,
+			                                                      .range = descriptor->entries[i].buffer.size};
 			break;
 		}
 	}
-	vkUpdateDescriptorSets(context.device,descriptor->entries,write_sets,0,NULL);
+	vkUpdateDescriptorSets(context.device, descriptor->entry_count, write_sets, 0, NULL);
 }
 
 void kinc_g6_bind_group_destroy(kinc_g6_bind_group_t *group) {
-	vkFreeDescriptorSets(context.device, NULL, 1, &group->impl.set);
+	vkFreeDescriptorSets(context.device, context.descriptor_pool, 1, &group->impl.set);
 }

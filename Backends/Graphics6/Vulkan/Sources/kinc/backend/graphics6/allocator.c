@@ -1,6 +1,17 @@
 #include "allocator.h"
 #include "vulkan.h"
 
+#include <gl/GL.h>
+
+typedef struct chunk {
+	VkDeviceMemory memory;
+	VkDeviceSize chunk_size;
+	VkMemoryPropertyFlags memory_properties;
+	uint32_t memory_type_index;
+} chunk_t;
+
+
+
 static VkPhysicalDeviceMemoryProperties memory_properties = {0};
 
 void kinc_vulkan_allocator_init() {

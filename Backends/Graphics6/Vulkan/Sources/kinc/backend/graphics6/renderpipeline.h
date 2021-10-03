@@ -3,6 +3,9 @@
 
 typedef struct kinc_g6_render_pipeline_impl {
     VkPipeline pipeline;
+	VkPipelineLayout layout;
+
+    VkRenderPass render_pass;
 } kinc_g6_render_pipeline_impl_t;
 
 typedef struct kinc_g6_pipeline_layout_impl {

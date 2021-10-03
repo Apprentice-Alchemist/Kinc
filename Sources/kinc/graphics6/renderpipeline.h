@@ -127,7 +127,7 @@ typedef struct kinc_g6_render_pipeline_descriptor {
 
 	// Color State
 
-	int attachment_count;
+	uint32_t attachment_count;
 	struct {
 		kinc_g6_texture_format_t format;
 

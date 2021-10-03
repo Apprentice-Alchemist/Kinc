@@ -54,7 +54,7 @@ typedef struct kinc_g6_vertex_attribute {
 typedef struct kinc_g6_vertex_layout {
 	uint64_t stride;
 	bool instanced;
-	int attribute_count;
+	uint32_t attribute_count;
 	kinc_g6_vertex_attribute_t attributes[KINC_G6_MAX_VERTEX_ATTRIBUTES];
 } kinc_g6_vertex_layout_t;
 

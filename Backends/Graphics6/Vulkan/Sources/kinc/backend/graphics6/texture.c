@@ -90,7 +90,7 @@ void kinc_g6_texture_view_init(kinc_g6_texture_view_t *view, const kinc_g6_textu
 	create_info.format = view->impl.format =
 	    descriptor->format == KINC_G6_TEXTURE_FORMAT_NONE ? descriptor->texture->impl.format : convert_texture_format(descriptor->format);
 	create_info.components = (VkComponentMapping){
-	    .r = VK_COMPONENT_SWIZZLE_IDENTITY, .g = VK_COMPONENT_SWIZZLE_IDENTITY, .b = VK_COMPONENT_SWIZZLE_IDENTITY, .a = VK_COMPONENT_SWIZZLE_IDENTITY};
+	    .r = VK_COMPONENT_SWIZZLE_R, .g = VK_COMPONENT_SWIZZLE_G, .b = VK_COMPONENT_SWIZZLE_B, .a = VK_COMPONENT_SWIZZLE_A};
 	create_info.subresourceRange.aspectMask = convert_aspect(descriptor->aspect);
 	create_info.subresourceRange.baseMipLevel = descriptor->base_mip_level;
 	create_info.subresourceRange.levelCount = descriptor->mip_level_count;

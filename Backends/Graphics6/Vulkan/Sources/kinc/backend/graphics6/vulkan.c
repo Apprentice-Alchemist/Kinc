@@ -386,7 +386,7 @@ void create_swapchain(kinc_g6_swapchain_t *swapchain, int width, int height) {
 void kinc_g6_swapchain_init(kinc_g6_swapchain_t *swapchain, int window, int width, int height) {
 	memset(swapchain, 0, sizeof(*swapchain));
 	VkSemaphoreCreateInfo sem_info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, .pNext = NULL, .flags = 0};
-	vkCreateSemaphore(context.device, &sem_info, NULL, &swapchain->impl.acquireSem);
+	CHECK(vkCreateSemaphore(context.device, &sem_info, NULL, &swapchain->impl.acquireSem));
 	CHECK(kinc_vulkan_create_surface(context.instance, window, &(swapchain->impl.surface)));
 	create_swapchain(swapchain, width, height);
 }
@@ -396,15 +396,9 @@ void kinc_g6_swapchain_resize(kinc_g6_swapchain_t *swapchain, int width, int hei
 }
 
 void kinc_g6_swapchain_destroy(kinc_g6_swapchain_t *swapchain) {
-	// for (int i = 0; i < swapchain->impl.swapchain_image_count; i++) {
-	// 	vkDestroyImageView(context.device, swapchain->impl.views[i], NULL);
-	// }
 	if (swapchain->impl.images != NULL) {
 		free(swapchain->impl.images);
 	}
-	// if (swapchain->impl.views != NULL) {
-	// 	free(swapchain->impl.views);
-	// }
 	vkDestroySurfaceKHR(context.instance, swapchain->impl.surface, NULL);
 }
 
@@ -431,25 +425,32 @@ kinc_g6_texture_t *kinc_g6_swapchain_next_texture(kinc_g6_swapchain_t *swapchain
 void kinc_internal_resize(int width, int height) {}
 void kinc_internal_change_framebuffer(int window, void *f) {}
 
-static VkSemaphore renderComplete = VK_NULL_HANDLE;
+static VkSemaphore relay_sem = VK_NULL_HANDLE;
+static bool relay_active = false;
 
 void kinc_g6_submit(kinc_g6_swapchain_t *swapchain, struct kinc_g6_command_buffer **buffers, int count) {
-	if (renderComplete == VK_NULL_HANDLE) {
+	if (relay_sem == VK_NULL_HANDLE) {
 		VkSemaphoreCreateInfo sem = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, .pNext = 0, .flags = 0};
-		vkCreateSemaphore(context.device, &sem, NULL, &renderComplete);
+		vkCreateSemaphore(context.device, &sem, NULL, &relay_sem);
 	}
 	VkSubmitInfo submit_info = {0};
 	submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submit_info.pNext = 0;
-	submit_info.waitSemaphoreCount = 1;
-	submit_info.pWaitSemaphores = &swapchain->impl.acquireSem;
-	submit_info.pWaitDstStageMask = (VkPipelineStageFlagBits[]){VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+	if (relay_active) {
+		submit_info.waitSemaphoreCount = 1;
+		submit_info.pWaitSemaphores = &relay_sem;
+		submit_info.pWaitDstStageMask = (VkPipelineStageFlagBits[]){VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+	} else {
+		// vkSemaphore
+		submit_info.waitSemaphoreCount = 0;
+	}
+	relay_active = true;
 	submit_info.commandBufferCount = count;
 	VkCommandBuffer *cbuffers = alloca(sizeof(VkCommandBuffer) * count);
 	for (int i = 0; i < count; i++) cbuffers[i] = buffers[i]->impl.buffer;
 	submit_info.pCommandBuffers = cbuffers;
 	submit_info.signalSemaphoreCount = 1;
-	submit_info.pSignalSemaphores = &renderComplete;
+	submit_info.pSignalSemaphores = &relay_sem;
 	vkQueueSubmit(context.queue, 1, &submit_info, VK_NULL_HANDLE);
 }
 
@@ -458,7 +459,9 @@ void kinc_g6_present(kinc_g6_swapchain_t *swapchain) {
 	present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	present_info.pNext;
 	present_info.waitSemaphoreCount = 1;
-	present_info.pWaitSemaphores = &renderComplete;
+	present_info.pWaitSemaphores = &relay_sem;
+
+	relay_active = false;
 
 	present_info.swapchainCount = 1;
 	present_info.pSwapchains = &swapchain->impl.swapchain;
@@ -471,6 +474,7 @@ void kinc_g6_present(kinc_g6_swapchain_t *swapchain) {
 	default:
 		CHECK(r);
 	}
+	vkDeviceWaitIdle(context.device);
 }
 
 bool kinc_window_vsynced() {

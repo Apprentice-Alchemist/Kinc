@@ -44,7 +44,7 @@ typedef struct kinc_g6_sampler {
 	kinc_g6_sampler_impl_t impl;
 } kinc_g6_sampler_t;
 
-KINC_FUNC void kinc_g6_internal_sampler_defaults(kinc_g6_sampler_descriptor_t *sampler);
+KINC_FUNC void kinc_g6_sampler_defaults(kinc_g6_sampler_descriptor_t *sampler);
 KINC_FUNC void kinc_g6_sampler_init(kinc_g6_sampler_t *sampler, const kinc_g6_sampler_descriptor_t *descriptor);
 KINC_FUNC void kinc_g6_sampler_destroy(kinc_g6_sampler_t *sampler);
 

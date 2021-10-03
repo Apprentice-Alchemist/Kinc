@@ -1,6 +1,6 @@
 #include "sampler.h"
 
-void kinc_g6_internal_sampler_defaults(kinc_g6_sampler_descriptor_t *sampler) {
+void kinc_g6_sampler_defaults(kinc_g6_sampler_descriptor_t *sampler) {
 	sampler->address_mode_u = KINC_G6_ADDRESS_MODE_CLAMP_TO_EDGE;
 	sampler->address_mode_v = KINC_G6_ADDRESS_MODE_CLAMP_TO_EDGE;
 	sampler->address_mode_w = KINC_G6_ADDRESS_MODE_CLAMP_TO_EDGE;

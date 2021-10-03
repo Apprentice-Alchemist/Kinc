@@ -54,7 +54,7 @@ typedef struct kinc_g6_depth_stencil_attachment {
 } kinc_g6_depth_stencil_attachment_t;
 
 typedef struct kinc_g6_render_pass_descriptor {
-	int color_attachment_count;
+	uint32_t color_attachment_count;
 	kinc_g6_color_attachment_t color_attachments[8];
 
 	kinc_g6_depth_stencil_attachment_t depth_stencil_attachment;
@@ -67,9 +67,33 @@ KINC_FUNC void kinc_g6_command_buffer_set_render_pipeline(kinc_g6_command_buffer
 KINC_FUNC void kinc_g6_command_buffer_set_index_buffer(kinc_g6_command_buffer_t *buffer, kinc_g6_buffer_t *index_buffer, int offset);
 KINC_FUNC void kinc_g6_command_buffer_set_vertex_buffers(kinc_g6_command_buffer_t *buffer, kinc_g6_buffer_t **vertex_buffers, int **offsets, int count);
 
+typedef enum kinc_g6_resource_barrier_type {
+	KINC_G6_RESOURCE_BARRIER_TYPE_BUFFER,
+	KINC_G6_RESOURCE_BARRIER_TYPE_TEXTURE,
+} kinc_g6_resource_barrier_type_t;
+
+typedef struct kinc_g6_buffer_barrier {
+	kinc_g6_buffer_t *buffer;
+} kinc_g6_buffer_barrier_t;
+
+typedef struct kinc_g6_texture_barrier {
+	kinc_g6_texture_t *texture;
+} kinc_g6_texture_barrier_t;
+
+typedef struct kinc_g6_resource_barrier {
+	kinc_g6_resource_barrier_type_t type;
+	union {
+		kinc_g6_buffer_barrier_t buffer_barrier;
+		kinc_g6_texture_barrier_t texture_barrier;
+	};
+} kinc_g6_resource_barrier_t;
+
+KINC_FUNC void kinc_g6_command_buffer_resource_barrier(kinc_g6_command_buffer_t *buffer, uint32_t barrier_count, const kinc_g6_resource_barrier_t **barriers);
+
 struct kinc_g6_bind_group;
 
-KINC_FUNC void kinc_g6_command_buffer_set_bind_group(kinc_g6_command_buffer_t *buffer, int index, struct kinc_g6_bind_group *group, uint32_t dynamicOffsetsCount, uint32_t* dynamicOffsets);
+KINC_FUNC void kinc_g6_command_buffer_set_bind_group(kinc_g6_command_buffer_t *buffer, int index, struct kinc_g6_bind_group *group,
+                                                     uint32_t dynamicOffsetsCount, uint32_t *dynamicOffsets);
 
 KINC_FUNC void kinc_g6_command_buffer_set_viewport(kinc_g6_command_buffer_t *buffer, int x, int y, int width, int height, int min_depth, int max_depth);
 KINC_FUNC void kinc_g6_command_buffer_set_scissor(kinc_g6_command_buffer_t *buffer, int x, int y, int width, int height);

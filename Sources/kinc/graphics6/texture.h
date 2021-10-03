@@ -63,7 +63,24 @@ typedef enum kinc_g6_texture_format {
 	KINC_G6_TEXTURE_FORMAT_DEPTH16_UNORM,
 	KINC_G6_TEXTURE_FORMAT_DEPTH24_PLUS,
 	KINC_G6_TEXTURE_FORMAT_DEPTH24_PLUS_STENCIL8,
-	KINC_G6_TEXTURE_FORMAT_DEPTH32_FLOAT
+	KINC_G6_TEXTURE_FORMAT_DEPTH32_FLOAT,
+
+	// S3TC : See https://www.khronos.org/registry/DataFormat/specs/1.3/dataformat.1.3.html#S3TC
+
+	KINC_G6_TEXTURE_FORMAT_BC1_RGBA_UNORM,
+	KINC_G6_TEXTURE_FORMAT_BC1_RGBA_UNORM_SRGB,
+	KINC_G6_TEXTURE_FORMAT_BC2_RGBA_UNORM,
+	KINC_G6_TEXTURE_FORMAT_BC2_RGBA_UNORM_SRGB,
+	KINC_G6_TEXTURE_FORMAT_BC3_RGBA_UNORM,
+	KINC_G6_TEXTURE_FORMAT_BC3_RGBA_UNORM_SRGB,
+	KINC_G6_TEXTURE_FORMAT_BC4_R_UNORM,
+	KINC_G6_TEXTURE_FORMAT_BC4_R_SNORM,
+	KINC_G6_TEXTURE_FORMAT_BC5_RG_UNORM,
+	KINC_G6_TEXTURE_FORMAT_BC5_RG_SNORM,
+	KINC_G6_TEXTURE_FORMAT_BC6H_RGB_UFLOAT,
+	KINC_G6_TEXTURE_FORMAT_BC6H_RGB_FLOAT,
+	KINC_G6_TEXTURE_FORMAT_BC7_RGBA_UNORM,
+	KINC_G6_TEXTURE_FORMAT_BC7_RGBA_UNORM_SRGB
 } kinc_g6_texture_format_t;
 
 typedef enum kinc_g6_texture_usage_bits {
@@ -93,6 +110,8 @@ typedef struct kinc_g6_texture_descriptor {
 	kinc_g6_texture_usage_t usage;
 	kinc_g6_texture_format_t format;
 } kinc_g6_texture_descriptor_t;
+
+KINC_FUNC void kinc_g6_texture_init_from_image(kinc_g6_texture_t *texture, struct kinc_g6_image *image);
 
 KINC_FUNC void kinc_g6_texture_init(kinc_g6_texture_t *texture, const kinc_g6_texture_descriptor_t *descriptor);
 KINC_FUNC void kinc_g6_texture_destroy(kinc_g6_texture_t *texture);

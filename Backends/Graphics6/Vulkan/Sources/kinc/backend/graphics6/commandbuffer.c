@@ -1,6 +1,6 @@
+#include <kinc/graphics6/bindgroup.h>
 #include <kinc/graphics6/commandbuffer.h>
 #include <kinc/graphics6/renderpipeline.h>
-#include <kinc/graphics6/bindgroup.h>
 
 VkAttachmentLoadOp convert_load_op(kinc_g6_load_op_t load) {
 	switch (load) {
@@ -102,6 +102,7 @@ void kinc_g6_command_buffer_render_pass_begin(kinc_g6_command_buffer_t *buffer, 
 		dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 		rp_info.pDependencies = &dependency;
 		vkCreateRenderPass(context.device, &rp_info, NULL, &begin_info.renderPass);
+		// begin_info.renderPass = buffer->impl.render_pass;
 	}
 	{
 		VkFramebufferCreateInfo fb_info = {0};
@@ -120,6 +121,7 @@ void kinc_g6_command_buffer_render_pass_begin(kinc_g6_command_buffer_t *buffer, 
 		fb_info.layers = 1;
 
 		CHECK(vkCreateFramebuffer(context.device, &fb_info, NULL, &begin_info.framebuffer));
+		// begin_info.framebuffer = buffer->impl.framebuffer;
 	}
 	begin_info.clearValueCount = 0;
 	VkClearValue clears[8] = {0};
@@ -138,9 +140,14 @@ void kinc_g6_command_buffer_render_pass_begin(kinc_g6_command_buffer_t *buffer, 
 }
 void kinc_g6_command_buffer_render_pass_end(kinc_g6_command_buffer_t *buffer) {
 	vkCmdEndRenderPass(buffer->impl.buffer);
+	// vkDestroyFramebuffer(context.device, buffer->impl.framebuffer, NULL);
+	// vkDestroyRenderPass(context.device, buffer->impl.render_pass, NULL);
 }
 
+static VkPipelineLayout p_layout = VK_NULL_HANDLE;
+
 void kinc_g6_command_buffer_set_render_pipeline(kinc_g6_command_buffer_t *buffer, kinc_g6_render_pipeline_t *pipeline) {
+	p_layout = pipeline->impl.layout;
 	vkCmdBindPipeline(buffer->impl.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->impl.pipeline);
 }
 
@@ -157,10 +164,36 @@ void kinc_g6_command_buffer_set_vertex_buffers(kinc_g6_command_buffer_t *buffer,
 	vkCmdBindVertexBuffers(buffer->impl.buffer, 0, count, pBuffers, pOffsets);
 }
 
+void kinc_g6_command_buffer_resource_barrier(kinc_g6_command_buffer_t *buffer, uint32_t barrier_count, const kinc_g6_resource_barrier_t *barriers) {
+	VkPipelineStageFlags src_flags = 0;
+	VkPipelineStageFlags dst_flags = 0;
+
+	uint32_t image_barrier_count = 0;
+	uint32_t buffer_barrier_count = 0;
+
+	for (int i = 0; i < barrier_count; i++) {
+		barriers[i].type == KINC_G6_RESOURCE_BARRIER_TYPE_BUFFER ? buffer_barrier_count++ : image_barrier_count;
+	}
+
+	VkImageMemoryBarrier *image_barriers = alloca(sizeof(VkImageMemoryBarrier) * image_barrier_count);
+	VkBufferMemoryBarrier *buffer_barriers = alloca(sizeof(VkBufferMemoryBarrier) * buffer_barrier_count);
+
+	uint32_t ib = 0;
+	uint32_t bb = 0;
+	for (int i = 0; i < barrier_count; i++) {
+		if(barriers[i].type == KINC_G6_RESOURCE_BARRIER_TYPE_BUFFER) {
+			VkBufferMemoryBarrier *barrier = &buffer_barriers[bb++];
+			barrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+			// barrier->buffer
+		} else {
+		}
+	}
+	vkCmdPipelineBarrier;
+}
+
 void kinc_g6_command_buffer_set_bind_group(kinc_g6_command_buffer_t *buffer, int index, struct kinc_g6_bind_group *group, uint32_t dynamicOffsetsCount,
                                            uint32_t *dynamicOffsets) {
-	vkCmdBindDescriptorSets(buffer->impl.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, VK_NULL_HANDLE, index, 1, &group->impl.set, dynamicOffsetsCount,
-	                        dynamicOffsets);
+	vkCmdBindDescriptorSets(buffer->impl.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, p_layout, index, 1, &group->impl.set, dynamicOffsetsCount, dynamicOffsets);
 }
 
 void kinc_g6_command_buffer_set_viewport(kinc_g6_command_buffer_t *buffer, int x, int y, int width, int height, int min_depth, int max_depth) {
@@ -190,7 +223,7 @@ void kinc_g6_command_buffer_draw_indexed_vertices(kinc_g6_command_buffer_t *buff
 	vkCmdDrawIndexed(buffer->impl.buffer, count, 1, start, vertex_offset, 0);
 }
 
-void kinc_g6_command_list_draw_indexed_vertices_instanced(kinc_g6_command_buffer_t *buffer, int instance_count, int start, int count) {
+void kinc_g6_command_buffer_draw_indexed_vertices_instanced(kinc_g6_command_buffer_t *buffer, int instance_count, int start, int count) {
 	vkCmdDrawIndexed(buffer->impl.buffer, count, instance_count, start, 0, 0);
 }
 

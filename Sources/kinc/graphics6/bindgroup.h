@@ -41,7 +41,7 @@ typedef struct kinc_g6_bind_group_layout_entry {
 } kinc_g6_bind_group_layout_entry_t;
 
 typedef struct kinc_g6_bind_group_layout_descriptor {
-	int entry_count;
+	uint32_t entry_count;
 	kinc_g6_bind_group_layout_entry_t *entries;
 } kinc_g6_bind_group_layout_descriptor_t;
 
@@ -63,7 +63,7 @@ typedef struct kinc_g6_bind_group_entry {
 
 typedef struct kinc_g6_bind_group_descriptor {
 	kinc_g6_bind_group_layout_t *layout;
-	int entry_count;
+	uint32_t entry_count;
 	struct kinc_g6_bind_group_entry *entries;
 } kinc_g6_bind_group_descriptor_t;
 
