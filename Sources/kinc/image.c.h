@@ -14,6 +14,8 @@
 #include <kinc/io/filereader.h>
 #include <kinc/log.h>
 #include <kinc/math/core.h>
+#include <kinc/memory.h>
+#include <kinc/string.h>
 
 #include <string.h>
 
@@ -54,7 +56,7 @@ static void *buffer_realloc(void *p, size_t size) {
 		if (new_pointer == NULL) {
 			return NULL;
 		}
-		memcpy(new_pointer, old_pointer, old_size < size ? old_size : size);
+		kinc_memcpy(new_pointer, old_pointer, old_size < size ? old_size : size);
 		return new_pointer;
 	}
 }
@@ -101,10 +103,10 @@ static int stb_eof(void *user) {
 
 static _Bool endsWith(const char *str, const char *suffix) {
 	if (str == NULL || suffix == NULL) return 0;
-	size_t lenstr = strlen(str);
-	size_t lensuffix = strlen(suffix);
+	size_t lenstr = kinc_string_length(str);
+	size_t lensuffix = kinc_string_length(suffix);
 	if (lensuffix > lenstr) return 0;
-	return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
+	return kinc_string_compare_limited(str + lenstr - lensuffix, suffix, lensuffix) == 0;
 }
 
 static size_t loadImageSize(kinc_image_read_callbacks_t callbacks, void *user_data, const char *filename) {
@@ -119,16 +121,16 @@ static size_t loadImageSize(kinc_image_read_callbacks_t callbacks, void *user_da
 		callbacks.read(user_data, fourcc, 4);
 		fourcc[4] = 0;
 
-		if (strcmp(fourcc, "LZ4 ") == 0) {
+		if (kinc_string_compare(fourcc, "LZ4 ") == 0) {
 			return width * height * 4;
 		}
-		else if (strcmp(fourcc, "LZ4F") == 0) {
+		else if (kinc_string_compare(fourcc, "LZ4F") == 0) {
 			return width * height * 16;
 		}
-		else if (strcmp(fourcc, "ASTC") == 0) {
+		else if (kinc_string_compare(fourcc, "ASTC") == 0) {
 			return width * height * 4; // just an upper bound
 		}
-		else if (strcmp(fourcc, "DXT5") == 0) {
+		else if (kinc_string_compare(fourcc, "DXT5") == 0) {
 			return width * height; // just an upper bound
 		}
 		else {
@@ -198,7 +200,7 @@ static bool loadImage(kinc_image_read_callbacks_t callbacks, void *user_data, co
 
 		int compressedSize = (int)callbacks.size(user_data) - 12;
 
-		if (strcmp(fourcc, "LZ4 ") == 0) {
+		if (kinc_string_compare(fourcc, "LZ4 ") == 0) {
 			*compression = KINC_IMAGE_COMPRESSION_NONE;
 			*internalFormat = 0;
 			*outputSize = *width * *height * 4;
@@ -206,7 +208,7 @@ static bool loadImage(kinc_image_read_callbacks_t callbacks, void *user_data, co
 			LZ4_decompress_safe((char *)buffer, (char *)output, compressedSize, *outputSize);
 			return true;
 		}
-		else if (strcmp(fourcc, "LZ4F") == 0) {
+		else if (kinc_string_compare(fourcc, "LZ4F") == 0) {
 			*compression = KINC_IMAGE_COMPRESSION_NONE;
 			*internalFormat = 0;
 			*outputSize = *width * *height * 16;
@@ -215,7 +217,7 @@ static bool loadImage(kinc_image_read_callbacks_t callbacks, void *user_data, co
 			*format = KINC_IMAGE_FORMAT_RGBA128;
 			return true;
 		}
-		else if (strcmp(fourcc, "ASTC") == 0) {
+		else if (kinc_string_compare(fourcc, "ASTC") == 0) {
 			*compression = KINC_IMAGE_COMPRESSION_ASTC;
 			*outputSize = *width * *height * 4;
 			callbacks.read(user_data, buffer, compressedSize);
@@ -257,7 +259,7 @@ static bool loadImage(kinc_image_read_callbacks_t callbacks, void *user_data, co
 			}
 			free(astcdata);*/
 		}
-		else if (strcmp(fourcc, "DXT5") == 0) {
+		else if (kinc_string_compare(fourcc, "DXT5") == 0) {
 			*compression = KINC_IMAGE_COMPRESSION_DXT5;
 			*outputSize = *width * *height;
 			callbacks.read(user_data, buffer, compressedSize);
@@ -338,7 +340,7 @@ static bool loadImage(kinc_image_read_callbacks_t callbacks, void *user_data, co
 			return false;
 		}
 		*outputSize = *width * *height * 16;
-		memcpy(output, uncompressed, *outputSize);
+		kinc_memcpy(output, uncompressed, *outputSize);
 		*format = KINC_IMAGE_FORMAT_RGBA128;
 		buffer_offset = 0;
 		return true;
@@ -460,7 +462,7 @@ struct kinc_internal_image_memory {
 static int memory_read_callback(void *user_data, void *data, size_t size) {
 	struct kinc_internal_image_memory *memory = (struct kinc_internal_image_memory *)user_data;
 	size_t read_size = memory->size - memory->offset < size ? memory->size - memory->offset : size;
-	memcpy(data, &memory->data[memory->offset], read_size);
+	kinc_memcpy(data, &memory->data[memory->offset], read_size);
 	memory->offset += read_size;
 	return (int)read_size;
 }

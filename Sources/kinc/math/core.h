@@ -21,6 +21,7 @@ KINC_FUNC float kinc_cot(float x);
 KINC_FUNC float kinc_round(float value);
 KINC_FUNC float kinc_ceil(float value);
 KINC_FUNC float kinc_pow(float value, float exponent);
+KINC_FUNC double kinc_powd(double value, double exponent);
 KINC_FUNC float kinc_max_float(void);
 KINC_FUNC float kinc_sqrt(float value);
 KINC_FUNC float kinc_abs(float value);
@@ -36,6 +37,7 @@ KINC_FUNC float kinc_max(float a, float b);
 KINC_FUNC int kinc_mini(int a, int b);
 KINC_FUNC int kinc_maxi(int a, int b);
 KINC_FUNC float kinc_clamp(float value, float minValue, float maxValue);
+KINC_FUNC int kinc_absi(int value);
 
 #ifdef __cplusplus
 }

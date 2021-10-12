@@ -17,6 +17,7 @@
 #include <kinc/input/pen.h>
 #include <kinc/input/surface.h>
 #include <kinc/log.h>
+#include <kinc/memory.h>
 #include <kinc/system.h>
 #include <kinc/threads/thread.h>
 #include <kinc/video.h>
@@ -563,10 +564,10 @@ LRESULT WINAPI KoreWindowsMessageProcedure(HWND hWnd, UINT msg, WPARAM wParam, L
 						MultiByteToWideChar(CP_UTF8, 0, text, -1, wtext, 4096);
 						OpenClipboard(hWnd);
 						EmptyClipboard();
-						size_t size = (wcslen(wtext) + 1) * sizeof(wchar_t);
+						size_t size = (kinc_wstring_length(wtext) + 1) * sizeof(wchar_t);
 						HANDLE handle = GlobalAlloc(GMEM_MOVEABLE, size);
 						void *data = GlobalLock(handle);
-						memcpy(data, wtext, size);
+						kinc_memcpy(data, wtext, size);
 						GlobalUnlock(handle);
 						SetClipboardData(CF_UNICODETEXT, handle);
 						CloseClipboard();
@@ -580,10 +581,10 @@ LRESULT WINAPI KoreWindowsMessageProcedure(HWND hWnd, UINT msg, WPARAM wParam, L
 						MultiByteToWideChar(CP_UTF8, 0, text, -1, wtext, 4096);
 						OpenClipboard(hWnd);
 						EmptyClipboard();
-						size_t size = (wcslen(wtext) + 1) * sizeof(wchar_t);
+						size_t size = (kinc_wstring_length(wtext) + 1) * sizeof(wchar_t);
 						HANDLE handle = GlobalAlloc(GMEM_MOVEABLE, size);
 						void *data = GlobalLock(handle);
-						memcpy(data, wtext, size);
+						kinc_memcpy(data, wtext, size);
 						GlobalUnlock(handle);
 						SetClipboardData(CF_UNICODETEXT, handle);
 						CloseClipboard();
@@ -809,13 +810,20 @@ static BOOL IsXInputDevice(const GUID *pGuidProductFromDirectInput) {
 			if (SUCCEEDED(hr) && var.vt == VT_BSTR && var.bstrVal != NULL) {
 				// Check if the device ID contains "IG_".  If it does, then it's an XInput device
 				// This information can not be found from DirectInput
-				if (wcsstr(var.bstrVal, L"IG_")) {
+				// TODO: Doesn't work with an Xbox Series X|S controller
+				if (kinc_wstring_find(var.bstrVal, L"IG_")) {
 					// If it does, then get the VID/PID from var.bstrVal
 					DWORD dwPid = 0, dwVid = 0;
-					WCHAR *strVid = wcsstr(var.bstrVal, L"VID_");
-					if (strVid && swscanf(strVid, L"VID_%4X", &dwVid) != 1) dwVid = 0;
-					WCHAR *strPid = wcsstr(var.bstrVal, L"PID_");
-					if (strPid && swscanf(strPid, L"PID_%4X", &dwPid) != 1) dwPid = 0;
+					WCHAR *strVid = kinc_wstring_find(var.bstrVal, L"VID_");
+#ifndef KINC_NO_CLIB
+					if (strVid && swscanf(strVid, L"VID_%4X", &dwVid) != 1) {
+						dwVid = 0;
+					}
+					WCHAR *strPid = kinc_wstring_find(var.bstrVal, L"PID_");
+					if (strPid && swscanf(strPid, L"PID_%4X", &dwPid) != 1) {
+						dwPid = 0;
+					}
+#endif
 
 					// Compare the VID/PID to the DInput device
 					DWORD dwVidPid = MAKELONG(dwVid, dwPid);
@@ -902,7 +910,7 @@ static BOOL CALLBACK enumerateJoysticksCallback(LPCDIDEVICEINSTANCEW ddi, LPVOID
 					hr = di_pads[padCount]->lpVtbl->Acquire(di_pads[padCount]);
 
 					if (SUCCEEDED(hr)) {
-						memset(&di_padState[padCount], 0, sizeof(DIJOYSTATE2));
+						kinc_memset(&di_padState[padCount], 0, sizeof(DIJOYSTATE2));
 						hr = di_pads[padCount]->lpVtbl->GetDeviceState(di_pads[padCount], sizeof(DIJOYSTATE2), &di_padState[padCount]);
 
 						if (SUCCEEDED(hr)) {
@@ -946,10 +954,10 @@ static BOOL CALLBACK enumerateJoysticksCallback(LPCDIDEVICEINSTANCEW ddi, LPVOID
 static void initializeDirectInput() {
 	HINSTANCE hinstance = GetModuleHandle(NULL);
 
-	memset(&di_pads, 0, sizeof(IDirectInputDevice8) * XUSER_MAX_COUNT);
-	memset(&di_padState, 0, sizeof(DIJOYSTATE2) * XUSER_MAX_COUNT);
-	memset(&di_lastPadState, 0, sizeof(DIJOYSTATE2) * XUSER_MAX_COUNT);
-	memset(&di_deviceCaps, 0, sizeof(DIDEVCAPS) * XUSER_MAX_COUNT);
+	kinc_memset(&di_pads, 0, sizeof(IDirectInputDevice8) * XUSER_MAX_COUNT);
+	kinc_memset(&di_padState, 0, sizeof(DIJOYSTATE2) * XUSER_MAX_COUNT);
+	kinc_memset(&di_lastPadState, 0, sizeof(DIJOYSTATE2) * XUSER_MAX_COUNT);
+	kinc_memset(&di_deviceCaps, 0, sizeof(DIDEVCAPS) * XUSER_MAX_COUNT);
 
 	HRESULT hr = DirectInput8Create(hinstance, DIRECTINPUT_VERSION, &IID_IDirectInput8, (void **)&di_instance, NULL);
 
@@ -1010,7 +1018,7 @@ bool handleDirectInputPad(int padIndex) {
 			}
 		}
 
-		memcpy(&di_lastPadState[padIndex], &di_padState[padIndex], sizeof(DIJOYSTATE2));
+		kinc_memcpy(&di_lastPadState[padIndex], &di_padState[padIndex], sizeof(DIJOYSTATE2));
 		break;
 	}
 	case DIERR_INPUTLOST: // fall through
@@ -1025,7 +1033,7 @@ bool handleDirectInputPad(int padIndex) {
 
 static bool isXInputGamepad(int gamepad) {
 	XINPUT_STATE state;
-	ZeroMemory(&state, sizeof(XINPUT_STATE));
+	kinc_memset(&state, 0, sizeof(XINPUT_STATE));
 	DWORD dwResult = InputGetState(gamepad, &state);
 	return dwResult == ERROR_SUCCESS;
 }
@@ -1068,7 +1076,7 @@ bool kinc_internal_handle_messages() {
 		detectGamepad = false;
 		for (DWORD i = 0; i < XUSER_MAX_COUNT; ++i) {
 			XINPUT_STATE state;
-			ZeroMemory(&state, sizeof(XINPUT_STATE));
+			kinc_memset(&state, 0, sizeof(XINPUT_STATE));
 			DWORD dwResult = InputGetState(i, &state);
 
 			if (dwResult == ERROR_SUCCESS) {
@@ -1186,12 +1194,12 @@ static void findSavePath() {
 	LPWSTR path;
 	folder->lpVtbl->GetPath(folder, 0, &path);
 
-	wcscpy(savePathw, path);
-	wcscat(savePathw, L"\\");
+	kinc_wstring_copy(savePathw, path);
+	kinc_wstring_append(savePathw, L"\\");
 	wchar_t name[1024];
 	MultiByteToWideChar(CP_UTF8, 0, kinc_application_name(), -1, name, 1024);
-	wcscat(savePathw, name);
-	wcscat(savePathw, L"\\");
+	kinc_wstring_append(savePathw, name);
+	kinc_wstring_append(savePathw, L"\\");
 
 	SHCreateDirectoryEx(NULL, savePathw, NULL);
 	WideCharToMultiByte(CP_UTF8, 0, savePathw, -1, savePath, 1024, NULL, NULL);
@@ -1226,7 +1234,7 @@ bool kinc_gamepad_connected(int num) {
 void kinc_gamepad_rumble(int gamepad, float left, float right) {
 	if (isXInputGamepad(gamepad)) {
 		XINPUT_VIBRATION vibration;
-		ZeroMemory(&vibration, sizeof(XINPUT_VIBRATION));
+		kinc_memset(&vibration, 0, sizeof(XINPUT_VIBRATION));
 		vibration.wLeftMotorSpeed = (WORD)(65535.f * left);
 		vibration.wRightMotorSpeed = (WORD)(65535.f * right);
 		InputSetState(gamepad, &vibration);
@@ -1249,7 +1257,7 @@ double kinc_time(void) {
 	return (double)(stamp.QuadPart - startCount.QuadPart) / (double)frequency.QuadPart;
 }
 
-#ifndef KINC_NO_MAIN
+#if !defined(KINC_NO_MAIN) && !defined(KINC_NO_CLIB)
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 	int ret = kickstart(__argc, __argv);
 	if (ret != 0) {
@@ -1345,10 +1353,10 @@ void kinc_copy_to_clipboard(const char *text) {
 	MultiByteToWideChar(CP_UTF8, 0, text, -1, wtext, 4096);
 	OpenClipboard(kinc_windows_window_handle(0));
 	EmptyClipboard();
-	size_t size = (wcslen(wtext) + 1) * sizeof(wchar_t);
+	size_t size = (kinc_wstring_length(wtext) + 1) * sizeof(wchar_t);
 	HANDLE handle = GlobalAlloc(GMEM_MOVEABLE, size);
 	void *data = GlobalLock(handle);
-	memcpy(data, wtext, size);
+	kinc_memcpy(data, wtext, size);
 	GlobalUnlock(handle);
 	SetClipboardData(CF_UNICODETEXT, handle);
 	CloseClipboard();

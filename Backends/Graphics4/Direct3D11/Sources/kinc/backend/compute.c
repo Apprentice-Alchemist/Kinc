@@ -2,6 +2,8 @@
 #include <kinc/graphics4/texture.h>
 #include <kinc/log.h>
 #include <kinc/math/core.h>
+#include <kinc/memory.h>
+#include <kinc/string.h>
 
 #include <kinc/backend/SystemMicrosoft.h>
 
@@ -130,7 +132,7 @@ void kinc_compute_shader_init(kinc_compute_shader_t *shader, void *_data, int le
 	unsigned index = 0;
 	uint8_t *data = (uint8_t *)_data;
 
-	memset(&shader->impl.attributes, 0, sizeof(shader->impl.attributes));
+	kinc_memset(&shader->impl.attributes, 0, sizeof(shader->impl.attributes));
 	int attributesCount = data[index++];
 	for (int i = 0; i < attributesCount; ++i) {
 		unsigned char name[256];
@@ -142,7 +144,7 @@ void kinc_compute_shader_init(kinc_compute_shader_t *shader, void *_data, int le
 		shader->impl.attributes[i].index = data[index++];
 	}
 
-	memset(&shader->impl.textures, 0, sizeof(shader->impl.textures));
+	kinc_memset(&shader->impl.textures, 0, sizeof(shader->impl.textures));
 	uint8_t texCount = data[index++];
 	for (unsigned i = 0; i < texCount; ++i) {
 		unsigned char name[256];
@@ -154,7 +156,7 @@ void kinc_compute_shader_init(kinc_compute_shader_t *shader, void *_data, int le
 		shader->impl.textures[i].index = data[index++];
 	}
 
-	memset(&shader->impl.constants, 0, sizeof(shader->impl.constants));
+	kinc_memset(&shader->impl.constants, 0, sizeof(shader->impl.constants));
 	uint8_t constantCount = data[index++];
 	shader->impl.constantsSize = 0;
 	for (unsigned i = 0; i < constantCount; ++i) {
@@ -179,9 +181,9 @@ void kinc_compute_shader_init(kinc_compute_shader_t *shader, void *_data, int le
 	}
 
 	shader->impl.length = (int)(length - index);
-	shader->impl.data = (uint8_t *)malloc(shader->impl.length);
+	shader->impl.data = (uint8_t *)kinc_allocate(shader->impl.length);
 	assert(shader->impl.data != NULL);
-	memcpy(shader->impl.data, &data[index], shader->impl.length);
+	kinc_memcpy(shader->impl.data, &data[index], shader->impl.length);
 
 	HRESULT hr = device->lpVtbl->CreateComputeShader(device, shader->impl.data, shader->impl.length, NULL, (ID3D11ComputeShader **)&shader->impl.shader);
 
@@ -249,9 +251,9 @@ kinc_compute_constant_location_t kinc_compute_shader_get_constant_location(kinc_
 kinc_compute_texture_unit_t kinc_compute_shader_get_texture_unit(kinc_compute_shader_t *shader, const char *name) {
 	char unitName[64];
 	int unitOffset = 0;
-	size_t len = strlen(name);
+	size_t len = kinc_string_length(name);
 	if (len > 63) len = 63;
-	strncpy(unitName, name, len + 1);
+	kinc_string_copy_limited(unitName, name, len + 1);
 	if (unitName[len - 1] == ']') {                  // Check for array - mySampler[2]
 		unitOffset = (int)(unitName[len - 2] - '0'); // Array index is unit offset
 		unitName[len - 3] = 0;                       // Strip array from name

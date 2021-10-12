@@ -1,7 +1,10 @@
 #include <kinc/graphics4/pipeline.h>
 #include <kinc/graphics4/shader.h>
 #include <kinc/graphics4/vertexbuffer.h>
+#include <kinc/libs/stb_sprintf.h>
 #include <kinc/log.h>
+#include <kinc/memory.h>
+#include <kinc/string.h>
 
 kinc_g4_pipeline_t *currentPipeline = NULL;
 
@@ -44,28 +47,6 @@ static D3D11_BLEND convert_blend_operation(kinc_g4_blending_operation_t operatio
 	default:
 		//	throw Exception("Unknown blending operation.");
 		return D3D11_BLEND_SRC_ALPHA;
-	}
-}
-
-static D3D11_COMPARISON_FUNC get_comparison(kinc_g4_compare_mode_t compare) {
-	switch (compare) {
-	default:
-	case KINC_G4_COMPARE_ALWAYS:
-		return D3D11_COMPARISON_ALWAYS;
-	case KINC_G4_COMPARE_NEVER:
-		return D3D11_COMPARISON_NEVER;
-	case KINC_G4_COMPARE_EQUAL:
-		return D3D11_COMPARISON_EQUAL;
-	case KINC_G4_COMPARE_NOT_EQUAL:
-		return D3D11_COMPARISON_NOT_EQUAL;
-	case KINC_G4_COMPARE_LESS:
-		return D3D11_COMPARISON_LESS;
-	case KINC_G4_COMPARE_LESS_EQUAL:
-		return D3D11_COMPARISON_LESS_EQUAL;
-	case KINC_G4_COMPARE_GREATER:
-		return D3D11_COMPARISON_GREATER;
-	case KINC_G4_COMPARE_GREATER_EQUAL:
-		return D3D11_COMPARISON_GREATER_EQUAL;
 	}
 }
 
@@ -115,7 +96,7 @@ void kinc_internal_set_constants(void) {
 }
 
 void kinc_g4_pipeline_init(struct kinc_g4_pipeline *state) {
-	memset(state, 0, sizeof(struct kinc_g4_pipeline));
+	kinc_memset(state, 0, sizeof(struct kinc_g4_pipeline));
 	kinc_g4_internal_pipeline_set_defaults(state);
 	state->impl.d3d11inputLayout = NULL;
 	state->impl.fragmentConstantBuffer = NULL;
@@ -305,9 +286,9 @@ kinc_g4_constant_location_t kinc_g4_pipeline_get_constant_location(struct kinc_g
 kinc_g4_texture_unit_t kinc_g4_pipeline_get_texture_unit(struct kinc_g4_pipeline *state, const char *name) {
 	char unitName[64];
 	int unitOffset = 0;
-	size_t len = strlen(name);
+	size_t len = kinc_string_length(name);
 	if (len > 63) len = 63;
-	strncpy(unitName, name, len + 1);
+	kinc_string_copy_limited(unitName, name, len + 1);
 	if (unitName[len - 1] == ']') {                  // Check for array - mySampler[2]
 		unitOffset = (int)(unitName[len - 2] - '0'); // Array index is unit offset
 		unitName[len - 3] = 0;                       // Strip array from name
@@ -362,11 +343,11 @@ static void setVertexDesc(D3D11_INPUT_ELEMENT_DESC *vertexDesc, int attributeInd
 	else {
 		// SPIRV_CROSS uses TEXCOORD_0_0,... for split up matrices
 		int stringStart = stringCacheIndex;
-		strcpy(&stringCache[stringCacheIndex], "TEXCOORD");
-		stringCacheIndex += (int)strlen("TEXCOORD");
-		_itoa(attributeIndex, &stringCache[stringCacheIndex], 10);
-		stringCacheIndex += (int)strlen(&stringCache[stringCacheIndex]);
-		strcpy(&stringCache[stringCacheIndex], "_");
+		kinc_string_copy(&stringCache[stringCacheIndex], "TEXCOORD");
+		stringCacheIndex += (int)kinc_string_length("TEXCOORD");
+		stbsp_sprintf(&stringCache[stringCacheIndex], "%i", attributeIndex);
+		stringCacheIndex += (int)kinc_string_length(&stringCache[stringCacheIndex]);
+		kinc_string_copy(&stringCache[stringCacheIndex], "_");
 		stringCacheIndex += 2;
 		vertexDesc->SemanticName = &stringCache[stringStart];
 		vertexDesc->SemanticIndex = subindex;
@@ -539,10 +520,10 @@ void kinc_g4_pipeline_compile(struct kinc_g4_pipeline *state) {
 				break;
 			case KINC_G4_VERTEX_DATA_FLOAT4X4: {
 				char name[101];
-				strcpy(name, state->input_layout[stream]->elements[index].name);
-				strcat(name, "_");
-				size_t length = strlen(name);
-				_itoa(0, &name[length], 10);
+				kinc_string_copy(name, state->input_layout[stream]->elements[index].name);
+				kinc_string_append(name, "_");
+				size_t length = kinc_string_length(name);
+				stbsp_sprintf(&name[length], "%i", 0);
 				name[length + 1] = 0;
 				int attributeLocation = getAttributeLocation(state->vertex_shader->impl.attributes, name, used);
 
@@ -562,7 +543,7 @@ void kinc_g4_pipeline_compile(struct kinc_g4_pipeline *state) {
 
 	{
 		D3D11_DEPTH_STENCIL_DESC desc;
-		ZeroMemory(&desc, sizeof(desc));
+		kinc_memset(&desc, 0, sizeof(desc));
 		desc.DepthEnable = state->depth_mode != KINC_G4_COMPARE_ALWAYS;
 		desc.DepthWriteMask = state->depth_write ? D3D11_DEPTH_WRITE_MASK_ALL : D3D11_DEPTH_WRITE_MASK_ZERO;
 		desc.DepthFunc = get_comparison(state->depth_mode);
@@ -614,12 +595,12 @@ void kinc_g4_pipeline_compile(struct kinc_g4_pipeline *state) {
 		}
 
 		D3D11_BLEND_DESC blendDesc;
-		ZeroMemory(&blendDesc, sizeof(blendDesc));
+		kinc_memset(&blendDesc, 0, sizeof(blendDesc));
 		blendDesc.AlphaToCoverageEnable = false;
 		blendDesc.IndependentBlendEnable = independentBlend;
 
 		D3D11_RENDER_TARGET_BLEND_DESC rtbd[8];
-		ZeroMemory(&rtbd, sizeof(rtbd));
+		kinc_memset(&rtbd, 0, sizeof(rtbd));
 		createRenderTargetBlendDesc(state, &rtbd[0], 0);
 		blendDesc.RenderTarget[0] = rtbd[0];
 		if (independentBlend) {

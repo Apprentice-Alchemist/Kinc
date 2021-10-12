@@ -16,6 +16,7 @@
 #include <kinc/system.h>
 
 #include <kinc/display.h>
+#include <kinc/memory.h>
 #include <kinc/window.h>
 
 #ifdef KORE_WINDOWS
@@ -63,20 +64,21 @@ static uint32_t samplers_size = 0;
 
 static ID3D11SamplerState *getSamplerState(D3D11_SAMPLER_DESC *desc) {
 	for (unsigned i = 0; i < samplers_size; ++i) {
-		if (memcmp(&desc, &samplers[i].desc, sizeof(D3D11_SAMPLER_DESC)) == 0) {
+		if (kinc_memcmp(desc, &samplers[i].desc, sizeof(D3D11_SAMPLER_DESC)) == 0) {
 			return samplers[i].state;
 		}
 	}
 	struct Sampler s;
 	s.desc = *desc;
 	device->lpVtbl->CreateSamplerState(device, &s.desc, &s.state);
+	assert(samplers_size < MAX_SAMPLERS);
 	samplers[samplers_size++] = s;
 	return s.state;
 }
 
 static void initSamplers() {
 	D3D11_SAMPLER_DESC samplerDesc;
-	ZeroMemory(&samplerDesc, sizeof(samplerDesc));
+	kinc_memset(&samplerDesc, 0, sizeof(samplerDesc));
 	samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
 	samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
 	samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
@@ -356,7 +358,7 @@ void kinc_g4_init(int windowId, int depthBufferBits, int stencilBufferBits, bool
 #endif
 
 	D3D11_SAMPLER_DESC samplerDesc;
-	ZeroMemory(&samplerDesc, sizeof(samplerDesc));
+	kinc_memset(&samplerDesc, 0, sizeof(samplerDesc));
 	samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
 	samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
 	samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
@@ -371,10 +373,10 @@ void kinc_g4_init(int windowId, int depthBufferBits, int stencilBufferBits, bool
 	initSamplers();
 
 	D3D11_BLEND_DESC blendDesc;
-	ZeroMemory(&blendDesc, sizeof(blendDesc));
+	kinc_memset(&blendDesc, 0, sizeof(blendDesc));
 
 	D3D11_RENDER_TARGET_BLEND_DESC rtbd;
-	ZeroMemory(&rtbd, sizeof(rtbd));
+	kinc_memset(&rtbd, 0, sizeof(rtbd));
 
 	rtbd.BlendEnable = true;
 	rtbd.SrcBlend = D3D11_BLEND_SRC_ALPHA;
@@ -1077,8 +1079,46 @@ void kinc_g4_set_texture_compare_mode(kinc_g4_texture_unit_t unit, bool enabled)
 	context->lpVtbl->PSSetSamplers(context, unit.impl.unit, 1, &sampler);
 }
 
+void kinc_g4_set_texture_compare_func(kinc_g4_texture_unit_t unit, kinc_g4_compare_mode_t mode) {
+	if (unit.impl.unit < 0) return;
+
+	lastSamplers[unit.impl.unit].ComparisonFunc = get_comparison(mode);
+
+	ID3D11SamplerState *sampler = getSamplerState(&lastSamplers[unit.impl.unit]);
+	context->lpVtbl->PSSetSamplers(context, unit.impl.unit, 1, &sampler);
+}
+
 void kinc_g4_set_cubemap_compare_mode(kinc_g4_texture_unit_t unit, bool enabled) {
 	kinc_g4_set_texture_compare_mode(unit, enabled);
+}
+
+void kinc_g4_set_cubemap_compare_func(kinc_g4_texture_unit_t unit, kinc_g4_compare_mode_t mode) {
+	kinc_g4_set_texture_compare_func(unit, mode);
+}
+
+void kinc_g4_set_texture_max_anisotropy(kinc_g4_texture_unit_t unit, uint16_t max_anisotropy) {
+	if (unit.impl.unit < 0) return;
+	lastSamplers[unit.impl.unit].MaxAnisotropy = max_anisotropy;
+
+	ID3D11SamplerState *sampler = getSamplerState(&lastSamplers[unit.impl.unit]);
+	context->lpVtbl->PSSetSamplers(context, unit.impl.unit, 1, &sampler);
+}
+
+void kinc_g4_set_cubemap_max_anisotropy(kinc_g4_texture_unit_t unit, uint16_t max_anisotropy) {
+	kinc_g4_set_texture_max_anisotropy(unit, max_anisotropy);
+}
+
+void kinc_g4_set_texture_lod(kinc_g4_texture_unit_t unit, float lod_min_clamp, float lod_max_clamp) {
+	if (unit.impl.unit < 0) return;
+	lastSamplers[unit.impl.unit].MinLOD = lod_min_clamp;
+	lastSamplers[unit.impl.unit].MaxLOD = lod_max_clamp;
+
+	ID3D11SamplerState *sampler = getSamplerState(&lastSamplers[unit.impl.unit]);
+	context->lpVtbl->PSSetSamplers(context, unit.impl.unit, 1, &sampler);
+}
+
+void kinc_g4_set_cubemap_lod(kinc_g4_texture_unit_t unit, float lod_min_clamp, float lod_max_clamp) {
+	kinc_g4_set_texture_lod(unit, lod_min_clamp, lod_max_clamp);
 }
 
 bool kinc_g4_render_targets_inverted_y() {
