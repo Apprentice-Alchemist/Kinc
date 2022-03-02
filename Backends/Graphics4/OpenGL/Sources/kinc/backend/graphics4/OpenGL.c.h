@@ -114,6 +114,9 @@ static void *glesDrawElementsInstanced;
 static int texModesU[256];
 static int texModesV[256];
 
+int gl_major;
+int gl_minor;
+
 void kinc_internal_resize(int window, int width, int height) {
 #ifdef KORE_WINDOWS
 	Kinc_Internal_resizeWindowRenderTarget(window, width, height);
@@ -153,7 +156,7 @@ void kinc_egl_destroy_window(int window);
 	do {                                                                                                                                                       \
 		EGLint error = eglGetError();                                                                                                                          \
 		if (error != EGL_SUCCESS) {                                                                                                                            \
-			kinc_log(KINC_LOG_LEVEL_ERROR, "EGL Error : %i", error);                                                                                           \
+			kinc_log(KINC_LOG_LEVEL_ERROR, "EGL Error : 0x%x", error);                                                                                           \
 			__builtin_trap();                                                                                                                                  \
 			exit(1);                                                                                                                                           \
 		}                                                                                                                                                      \
@@ -234,10 +237,6 @@ EGLNativeWindowType kinc_egl_get_native_window(EGLDisplay, EGLConfig, int);
 
 extern bool kinc_internal_opengl_force_16bit_index_buffer;
 
-#ifdef KORE_OPENGL_ES
-int gles_version = 2;
-#endif
-
 void kinc_g4_internal_init_window(int windowId, int depthBufferBits, int stencilBufferBits, bool vsync) {
 #ifdef KORE_WINDOWS
 	Kinc_Internal_initWindowsGLContext(windowId, depthBufferBits, stencilBufferBits);
@@ -294,12 +293,15 @@ void kinc_g4_internal_init_window(int windowId, int depthBufferBits, int stencil
 		Kinc_Internal_SupportsDepthTexture = exts != NULL && strstr(exts, "GL_OES_depth_texture") != NULL;
 		maxColorAttachments = 4;
 
-		int major = -1;
+		int major = -1, minor = -1;
 		glGetIntegerv(GL_MAJOR_VERSION, &major);
+		glGetIntegerv(GL_MINOR_VERSION, &minor);
 		glCheckErrors();
-		kinc_internal_opengl_force_16bit_index_buffer = major < 3 && strstr(exts, "GL_OES_element_index_uint") == NULL;
-
-		gles_version = major;
+		if(major > 0 && minor > 0) {
+			gl_major = major;
+			gl_minor = minor;
+		}
+		kinc_internal_opengl_force_16bit_index_buffer = gl_major < 3 && strstr(exts, "GL_OES_element_index_uint") == NULL;
 	}
 #else
 	kinc_internal_opengl_force_16bit_index_buffer = false;
@@ -323,11 +325,12 @@ void kinc_g4_internal_init_window(int windowId, int depthBufferBits, int stencil
 		}
 		minor = 0;
 	}
-	int gl_version = major * 100 + minor * 10;
+	gl_major = major;
+	gl_minor = minor;
 #endif
 
 #if defined(KORE_LINUX) || defined(KORE_MACOS)
-	if (gl_version >= 300) {
+	if (gl_major >= 3) {
 		unsigned vertexArray;
 		glGenVertexArrays(1, &vertexArray);
 		glCheckErrors();
@@ -570,14 +573,56 @@ void kinc_egl_init() {
 	if (!num_configs) {
 		kinc_log(KINC_LOG_LEVEL_ERROR, "Unable to choose EGL config");
 	}
-
-#ifdef KORE_OPENGL
-	EGLint contextAttribs[] = {EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 3, EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE, EGL_TRUE, EGL_NONE};
+#ifdef KORE_OPENGL_ES
+	gl_major = 3;
+	gl_minor = 2;
 #else
-	EGLint contextAttribs[] = {EGL_CONTEXT_MAJOR_VERSION, 2, EGL_NONE};
+	gl_major = 4;
+	gl_minor = 6;
 #endif
-	egl_context = eglCreateContext(egl_display, egl_config, EGL_NO_CONTEXT, contextAttribs);
-	EGL_CHECK_ERROR()
+
+	while(egl_context == EGL_NO_CONTEXT && gl_major > 0 && gl_minor > 0) {
+
+		EGLint contextAttribs[] = {EGL_CONTEXT_MAJOR_VERSION,
+		                           gl_major,
+		                           EGL_CONTEXT_MINOR_VERSION,
+		                           gl_minor,
+#ifdef KORE_OPENGL
+		                           EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE,
+								   EGL_TRUE,
+#endif
+		                           EGL_NONE};
+		egl_context = eglCreateContext(egl_display, egl_config, EGL_NO_CONTEXT, contextAttribs);
+		if(egl_context == EGL_NO_CONTEXT) {
+			if(gl_minor > 0) {
+				gl_minor--;
+			} else {
+				gl_major--;
+				#ifdef KORE_OPENGL
+				switch (gl_major) {
+					case 3: gl_minor = 3; break;
+					case 2: gl_minor = 1; break; // krafix emits GLSL 1.10 on Linux
+					default:
+						kinc_log(KINC_LOG_LEVEL_ERROR, "Your hardware does not support OpenGL 2.0+.");
+						kinc_stop();
+				}
+				#else
+				switch (gl_major) {
+					case 2: gl_minor = 1; break;
+					default:
+						kinc_log(KINC_LOG_LEVEL_ERROR, "Your hardware does not support OpenGL ES 2.0+.");
+						kinc_stop();
+				}
+				#endif
+			}
+		}
+	}
+
+	if(egl_context == EGL_NO_CONTEXT) {
+		kinc_log(KINC_LOG_LEVEL_ERROR, "Failed to create EGL context.");
+		EGL_CHECK_ERROR()
+		kinc_stop();
+	}
 }
 
 int kinc_egl_width(int window) {
@@ -1067,7 +1112,7 @@ bool kinc_g4_non_pow2_textures_supported() {
 #if (defined(KORE_OPENGL) && !defined(KORE_PI) && !defined(KORE_ANDROID)) || (defined(KORE_ANDROID) && KORE_ANDROID_API >= 18)
 bool kinc_g4_init_occlusion_query(unsigned *occlusionQuery) {
 #if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID) && KORE_ANDROID_API >= 18
-	if (gles_version >= 3 && glesGenQueries) {
+	if (gl_major >= 3 && glesGenQueries) {
 		glesGenQueries(1, occlusionQuery);
 	}
 #else
@@ -1078,7 +1123,7 @@ bool kinc_g4_init_occlusion_query(unsigned *occlusionQuery) {
 
 void kinc_g4_delete_occlusion_query(unsigned occlusionQuery) {
 #if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID) && KORE_ANDROID_API >= 18
-	if (gles_version >= 3 && glesGenQueries) {
+	if (gl_major >= 3 && glesGenQueries) {
 		glesDeleteQueries(1, &occlusionQuery);
 	}
 #else
@@ -1094,7 +1139,7 @@ void kinc_g4_delete_occlusion_query(unsigned occlusionQuery) {
 
 void kinc_g4_render_occlusion_query(unsigned occlusionQuery, int triangles) {
 #if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID) && KORE_ANDROID_API >= 18
-	if (gles_version >= 3 && glesGenQueries) {
+	if (gl_major >= 3 && glesGenQueries) {
 		glesBeginQuery(SAMPLES_PASSED, occlusionQuery);
 		glDrawArrays(GL_TRIANGLES, 0, triangles);
 		glCheckErrors();
@@ -1111,7 +1156,7 @@ void kinc_g4_render_occlusion_query(unsigned occlusionQuery, int triangles) {
 bool kinc_g4_are_query_results_available(unsigned occlusionQuery) {
 	unsigned available = 0;
 #if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID) && KORE_ANDROID_API >= 18
-	if (gles_version >= 3 && glesGetQueryObjectuiv) {
+	if (gl_major >= 3 && glesGetQueryObjectuiv) {
 		glesGetQueryObjectuiv(occlusionQuery, GL_QUERY_RESULT_AVAILABLE, &available);
 	}
 #else
@@ -1122,7 +1167,7 @@ bool kinc_g4_are_query_results_available(unsigned occlusionQuery) {
 
 void kinc_g4_get_query_results(unsigned occlusionQuery, unsigned *pixelCount) {
 #if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID) && KORE_ANDROID_API >= 18
-	if (gles_version >= 3 && glesGetQueryObjectuiv) {
+	if (gl_major >= 3 && glesGetQueryObjectuiv) {
 		glesGetQueryObjectuiv(occlusionQuery, GL_QUERY_RESULT, pixelCount);
 	}
 #else
