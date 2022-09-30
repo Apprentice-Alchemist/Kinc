@@ -1,5 +1,7 @@
 #pragma once
 
+#include <kinc/global.h>
+
 #ifdef KORE_WINDOWS
 #include <GL/glew.h>
 
@@ -18,7 +20,6 @@
 #endif
 
 #ifdef KORE_ANDROID
-#include <EGL/egl.h>
 #if KORE_ANDROID_API >= 18
 #include <GLES3/gl3.h>
 #endif
@@ -33,9 +34,14 @@
 #endif
 
 #ifdef KORE_LINUX
+#ifdef KORE_OPENGL_ES
+#include <GLES3/gl31.h>
+#include <GLES2/gl2ext.h>
+#else
 #define GL_GLEXT_PROTOTYPES
 #include <GL/gl.h>
 #include <GL/glext.h>
+#endif
 #endif
 
 #ifdef KORE_PI
@@ -68,3 +74,32 @@
 		}                                                                                                                                                      \
 	}
 #endif
+
+struct gl_ctx {
+	PFNGLDRAWBUFFERSPROC DrawBuffers;
+	PFNGLDRAWELEMENTSINSTANCEDPROC DrawElementsInstanced;
+	PFNGLVERTEXATTRIBDIVISORPROC VertexAttribDivisor;
+
+	PFNGLGENQUERIESPROC GenQueries;
+	PFNGLDELETEQUERIESPROC DeleteQueries;
+	PFNGLBEGINQUERYPROC BeginQuery;
+	PFNGLENDQUERYPROC EndQuery;
+	PFNGLGETQUERYOBJECTUIVPROC GetQueryObjectuiv;
+
+	PFNGLDISPATCHCOMPUTEPROC DispatchCompute;
+	PFNGLMEMORYBARRIERPROC MemoryBarrier;
+
+	PFNGLBINDIMAGETEXTUREPROC BindImageTexture;
+};
+
+struct gl_features {
+	bool draw_buffers;
+	bool instanced_rendering;
+	bool queries;
+	bool compute;
+	bool vertex_arrays;
+	bool bind_image_texture;
+};
+
+extern struct gl_ctx gl;
+extern struct gl_features gl_features;

@@ -1,5 +1,6 @@
 #include "OpenGL.h"
 #include "ogl.h"
+#include <GL/gl.h>
 #ifdef KINC_EGL
 #define EGL_NO_PLATFORM_SPECIFIC_TYPES
 #include <EGL/egl.h>
@@ -70,16 +71,6 @@ bool Kinc_Internal_ProgramUsesTessellation;
 bool Kinc_Internal_SupportsConservativeRaster = false;
 bool Kinc_Internal_SupportsDepthTexture = true;
 
-#if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID) && KORE_ANDROID_API >= 18
-void *glesVertexAttribDivisor;
-
-GL_APICALL void (*GL_APIENTRY glesGenQueries)(GLsizei n, GLuint *ids);
-GL_APICALL void (*GL_APIENTRY glesDeleteQueries)(GLsizei n, const GLuint *ids);
-GL_APICALL void (*GL_APIENTRY glesBeginQuery)(GLenum target, GLuint id);
-GL_APICALL void (*GL_APIENTRY glesEndQuery)(GLenum target);
-GL_APICALL void (*GL_APIENTRY glesGetQueryObjectuiv)(GLuint id, GLenum pname, GLuint *params);
-#endif
-
 #if defined(KORE_WINDOWS) && !defined(NDEBUG)
 static void __stdcall debugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam) {
 	kinc_log(KINC_LOG_LEVEL_INFO, "OpenGL: %s", message);
@@ -89,6 +80,9 @@ static void __stdcall debugCallback(GLenum source, GLenum type, GLuint id, GLenu
 #ifdef KORE_WINDOWS
 static HINSTANCE instance = 0;
 #endif
+
+struct gl_ctx gl = {0};
+struct gl_features gl_features = {0};
 
 static int currentWindow = 0;
 
@@ -102,11 +96,6 @@ static bool renderToBackbuffer;
 static int maxColorAttachments;
 
 static kinc_g4_pipeline_t *lastPipeline = NULL;
-
-#if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID) && KORE_ANDROID_API >= 18
-static void *glesDrawBuffers;
-static void *glesDrawElementsInstanced;
-#endif
 
 static int texModesU[256];
 static int texModesV[256];
@@ -129,6 +118,15 @@ void kinc_internal_change_framebuffer(int window, kinc_framebuffer_options_t *fr
 #endif
 }
 
+extern bool kinc_internal_opengl_force_16bit_index_buffer;
+
+#ifdef KORE_OPENGL_ES
+int gles_version = 2;
+int gles_minor = 0;
+#else
+int gl_version = 200;
+#endif
+
 #ifdef KINC_EGL
 static EGLDisplay egl_display = EGL_NO_DISPLAY;
 static EGLContext egl_context = EGL_NO_CONTEXT;
@@ -143,9 +141,7 @@ EGLNativeWindowType kinc_egl_get_native_window(EGLDisplay, EGLConfig, int);
 void kinc_egl_init();
 void kinc_egl_init_window(int window);
 void kinc_egl_destroy_window(int window);
-#endif
 
-#ifdef KINC_EGL
 #define EGL_CHECK_ERROR()                                                                                                                                      \
 	{                                                                                                                                                          \
 		EGLint error = eglGetError();                                                                                                                          \
@@ -202,70 +198,7 @@ void kinc_g4_internal_destroy_window(int window) {
 #undef CreateWindow
 #endif
 
-void kinc_g4_internal_init() {
-#ifdef KINC_EGL
-#if !defined(KORE_OPENGL_ES)
-	eglBindAPI(EGL_OPENGL_API);
-#else
-	eglBindAPI(EGL_OPENGL_ES_API);
-#endif
-	kinc_egl_init();
-#endif
-
-#ifndef VR_RIFT
-	for (int i = 0; i < 32; ++i) {
-		minFilters[i] = KINC_G4_TEXTURE_FILTER_LINEAR;
-		mipFilters[i] = KINC_G4_MIPMAP_FILTER_NONE;
-	}
-#endif
-	for (int i = 0; i < 256; ++i) {
-		texModesU[i] = GL_CLAMP_TO_EDGE;
-		texModesV[i] = GL_CLAMP_TO_EDGE;
-	}
-}
-
-#ifdef KINC_EGL
-EGLDisplay kinc_egl_get_display(void);
-EGLNativeWindowType kinc_egl_get_native_window(EGLDisplay, EGLConfig, int);
-#endif
-
-extern bool kinc_internal_opengl_force_16bit_index_buffer;
-
-#ifdef KORE_OPENGL_ES
-int gles_version = 2;
-#endif
-
-void kinc_g4_internal_init_window(int windowId, int depthBufferBits, int stencilBufferBits, bool vsync) {
-#ifdef KORE_WINDOWS
-	Kinc_Internal_initWindowsGLContext(windowId, depthBufferBits, stencilBufferBits);
-#endif
-#ifdef KINC_EGL
-	kinc_egl_init_window(windowId);
-#endif
-
-#ifdef KORE_WINDOWS
-	if (windowId == 0) {
-#ifdef KORE_VR
-		vsync = false;
-#endif
-		if (wglSwapIntervalEXT != NULL) wglSwapIntervalEXT(vsync);
-	}
-#endif
-
-	renderToBackbuffer = true;
-
-#if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID) && KORE_ANDROID_API >= 18
-	glesDrawBuffers = (void *)eglGetProcAddress("glDrawBuffers");
-	glesDrawElementsInstanced = (void *)eglGetProcAddress("glDrawElementsInstanced");
-	glesVertexAttribDivisor = (void *)eglGetProcAddress("glVertexAttribDivisor");
-
-	glesGenQueries = (void *)eglGetProcAddress("glGenQueries");
-	glesDeleteQueries = (void *)eglGetProcAddress("glDeleteQueries");
-	glesBeginQuery = (void *)eglGetProcAddress("glBeginQuery");
-	glesEndQuery = (void *)eglGetProcAddress("glEndQuery");
-	glesGetQueryObjectuiv = (void *)eglGetProcAddress("glGetQueryObjectuiv");
-#endif
-
+void kinc_opengl_after_init_context() {
 #if defined(KORE_WINDOWS) && !defined(NDEBUG)
 	glEnable(GL_DEBUG_OUTPUT);
 	glDebugMessageCallback(debugCallback, NULL);
@@ -288,9 +221,13 @@ void kinc_g4_internal_init_window(int windowId, int depthBufferBits, int stencil
 #ifdef KORE_OPENGL_ES
 	{
 		int major = -1;
+		int minor = -1;
 		glGetIntegerv(GL_MAJOR_VERSION, &major);
 		glCheckErrors();
 		gles_version = major;
+		glGetIntegerv(GL_MINOR_VERSION, &minor);
+		glCheckErrors();
+		gles_minor = minor;
 		char *exts = (char *)glGetString(GL_EXTENSIONS);
 
 		Kinc_Internal_SupportsDepthTexture = major >= 3 || (exts != NULL && strstr(exts, "GL_OES_depth_texture") != NULL);
@@ -303,12 +240,14 @@ void kinc_g4_internal_init_window(int windowId, int depthBufferBits, int stencil
 
 	glGetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &maxColorAttachments);
 
-	lastPipeline = NULL;
-
 #ifndef KORE_OPENGL_ES
 	int major = -1, minor = -1;
 	glGetIntegerv(GL_MAJOR_VERSION, &major);
+	glCheckErrors();
 	glGetIntegerv(GL_MINOR_VERSION, &minor);
+	glCheckErrors();
+	kinc_log(KINC_LOG_LEVEL_ERROR, "major: %i, minor: %i", major, minor);
+	kinc_log(KINC_LOG_LEVEL_ERROR, "version: %s", glGetString(GL_VERSION));
 	if (major < 0 || minor < 0) {
 		const GLubyte *version = glGetString(GL_VERSION);
 		if (version != NULL) {
@@ -319,12 +258,93 @@ void kinc_g4_internal_init_window(int windowId, int depthBufferBits, int stencil
 		}
 		minor = 0;
 	}
-	int gl_version = major * 100 + minor * 10;
+	gl_version = major * 100 + minor * 10;
 #endif
 
-#if defined(KORE_LINUX) || defined(KORE_MACOS)
-	if (gl_version >= 300) {
-		unsigned vertexArray;
+#ifdef KINC_EGL
+#define GET_PROC(name) gl.name = (void *)eglGetProcAddress("gl" #name)
+#else
+#error TODO
+#endif
+
+	GET_PROC(DrawBuffers);
+	GET_PROC(DrawElementsInstanced);
+	GET_PROC(VertexAttribDivisor);
+
+	GET_PROC(GenQueries);
+	GET_PROC(DeleteQueries);
+	GET_PROC(BeginQuery);
+	GET_PROC(EndQuery);
+	GET_PROC(GetQueryObjectuiv);
+
+	GET_PROC(DispatchCompute);
+	GET_PROC(MemoryBarrier);
+
+	GET_PROC(BindImageTexture);
+#undef GET_PROC
+#ifdef KORE_OPENGL_ES
+	gl_features.draw_buffers = gles_version >= 3 && gl.DrawBuffers != NULL;
+	gl_features.instanced_rendering = gles_version >= 3 && gl.DrawElementsInstanced != NULL && gl.VertexAttribDivisor != NULL;
+	gl_features.queries =
+	    gles_version >= 3 && gl.GenQueries != NULL && gl.DeleteQueries != NULL && gl.BeginQuery != NULL && gl.EndQuery != NULL && gl.GetQueryObjectuiv != NULL;
+	gl_features.compute = gles_version >= 3 && gles_minor >= 1 && gl.DispatchCompute != NULL && gl.MemoryBarrier != NULL;
+	gl_features.vertex_arrays = gles_version >= 3;
+	gl_features.bind_image_texture = gles_version >= 3 && gles_minor >= 1 && gl.BindImageTexture != NULL;
+#else
+	gl_features.draw_buffers = true;
+	gl_features.instanced_rendering = true;
+	gl_features.queries = true;
+	gl_features.compute = gl_version >= 430 && gl.DispatchCompute != NULL && gl.MemoryBarrier != NULL;
+	gl_features.vertex_arrays = gl_version >= 330;
+	gl_features.bind_image_texture = gl_version >= 420 && gl.BindImageTexture != NULL;
+#endif
+}
+
+void kinc_g4_internal_init() {
+#ifdef KINC_EGL
+	kinc_egl_init();
+	kinc_opengl_after_init_context();
+#endif
+
+#ifndef VR_RIFT
+	for (int i = 0; i < 32; ++i) {
+		minFilters[i] = KINC_G4_TEXTURE_FILTER_LINEAR;
+		mipFilters[i] = KINC_G4_MIPMAP_FILTER_NONE;
+	}
+#endif
+	for (int i = 0; i < 256; ++i) {
+		texModesU[i] = GL_CLAMP_TO_EDGE;
+		texModesV[i] = GL_CLAMP_TO_EDGE;
+	}
+}
+
+void kinc_g4_internal_init_window(int windowId, int depthBufferBits, int stencilBufferBits, bool vsync) {
+#ifdef KORE_WINDOWS
+	Kinc_Internal_initWindowsGLContext(windowId, depthBufferBits, stencilBufferBits);
+	if (windowId == 0) {
+		kinc_opengl_after_init_context();
+	}
+#endif
+#ifdef KINC_EGL
+	kinc_egl_init_window(windowId);
+#endif
+
+#ifdef KORE_WINDOWS
+	if (windowId == 0) {
+#ifdef KORE_VR
+		vsync = false;
+#endif
+		if (wglSwapIntervalEXT != NULL) wglSwapIntervalEXT(vsync);
+	}
+#endif
+
+	lastPipeline = NULL;
+
+	renderToBackbuffer = true;
+
+#if !defined(KORE_WINDOWS) && !defined(KORE_OPENGL_ES)
+	if (gl_features.vertex_arrays) {
+		unsigned vertexArray = GL_NONE;
 		glGenVertexArrays(1, &vertexArray);
 		glCheckErrors();
 		glBindVertexArray(vertexArray);
@@ -487,8 +507,10 @@ void kinc_g4_draw_indexed_vertices_instanced_from_to(int instanceCount, int star
 	bool sixteen = Kinc_Internal_CurrentIndexBuffer->impl.format == KINC_G4_INDEX_BUFFER_FORMAT_16BIT || kinc_internal_opengl_force_16bit_index_buffer;
 	GLenum type = sixteen ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
 	void *_start = sixteen ? (void *)(start * sizeof(uint16_t)) : (void *)(start * sizeof(uint32_t));
-#if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID) && KORE_ANDROID_API >= 18
-	((void (*)(GLenum, GLsizei, GLenum, void *, GLsizei))glesDrawElementsInstanced)(GL_TRIANGLES, count, type, _start, instanceCount);
+#if defined(KORE_OPENGL_ES)
+	if(gl_features.instanced_rendering) {
+		gl.DrawElementsInstanced(GL_TRIANGLES, count, type, _start, instanceCount);
+	}
 #elif !defined(KORE_OPENGL_ES)
 	if (Kinc_Internal_ProgramUsesTessellation) {
 		glDrawElementsInstanced(GL_PATCHES, count, type, _start, instanceCount);
@@ -515,6 +537,12 @@ static EGLint egl_minor = 0;
 static int egl_depth_size = 0;
 
 void kinc_egl_init() {
+#if !defined(KORE_OPENGL_ES)
+	eglBindAPI(EGL_OPENGL_API);
+#else
+	kinc_log(KINC_LOG_LEVEL_ERROR, "Binding OpenGL ES");
+	eglBindAPI(EGL_OPENGL_ES_API);
+#endif
 	egl_display = kinc_egl_get_display();
 	eglInitialize(egl_display, &egl_major, &egl_minor);
 	EGL_CHECK_ERROR()
@@ -569,6 +597,9 @@ void kinc_egl_init() {
 
 #if !defined(KORE_OPENGL_ES)
 	EGLint gl_versions[][2] = {{4, 6}, {4, 5}, {4, 4}, {4, 3}, {4, 2}, {4, 1}, {4, 0}, {3, 3}, {3, 2}, {3, 1}, {3, 0}, {2, 1}, {2, 0}};
+#else
+	EGLint gl_versions[][2] = {{3, 2}, {3, 1}, {3, 0}, {2, 0}};
+#endif
 	bool gl_initialized = false;
 	for (int i = 0; i < sizeof(gl_versions) / sizeof(EGLint) / 2; ++i) {
 		{
@@ -583,7 +614,11 @@ void kinc_egl_init() {
 			EGLint error = eglGetError();
 			if (error == EGL_SUCCESS) {
 				gl_initialized = true;
+#if !defined(KORE_OPENGL_ES)
 				kinc_log(KINC_LOG_LEVEL_INFO, "Using OpenGL version %i.%i (forward-compatible).", gl_versions[i][0], gl_versions[i][1]);
+#else
+				kinc_log(KINC_LOG_LEVEL_INFO, "Using OpenGL ES version %i.%i (forward-compatible).", gl_versions[i][0], gl_versions[i][1]);
+#endif
 				break;
 			}
 		}
@@ -594,7 +629,11 @@ void kinc_egl_init() {
 			EGLint error = eglGetError();
 			if (error == EGL_SUCCESS) {
 				gl_initialized = true;
+#if !defined(KORE_OPENGL_ES)
 				kinc_log(KINC_LOG_LEVEL_INFO, "Using OpenGL version %i.%i.", gl_versions[i][0], gl_versions[i][1]);
+#else
+				kinc_log(KINC_LOG_LEVEL_INFO, "Using OpenGL ES version %i.%i.", gl_versions[i][0], gl_versions[i][1]);
+#endif
 				break;
 			}
 		}
@@ -604,11 +643,8 @@ void kinc_egl_init() {
 		kinc_log(KINC_LOG_LEVEL_ERROR, "Could not create OpenGL-context.");
 		exit(1);
 	}
-#else
-	EGLint contextAttribs[] = {EGL_CONTEXT_MAJOR_VERSION, 2, EGL_NONE};
-	egl_context = eglCreateContext(egl_display, egl_config, EGL_NO_CONTEXT, contextAttribs);
-	EGL_CHECK_ERROR()
-#endif
+
+	eglMakeCurrent(egl_display, NULL, NULL, egl_context);
 }
 
 int kinc_egl_width(int window) {
@@ -1038,8 +1074,10 @@ void kinc_g4_set_render_targets(kinc_g4_render_target_t **targets, int count) {
 
 		GLenum buffers[16];
 		for (int i = 0; i < count; ++i) buffers[i] = GL_COLOR_ATTACHMENT0 + i;
-#if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID) && KORE_ANDROID_API >= 18
-		((void (*)(GLsizei, GLenum *))glesDrawBuffers)(count, buffers);
+#if defined(KORE_OPENGL_ES)
+		if(gl_features.draw_buffers) {
+			gl.DrawBuffers(count, buffers);
+		}
 #elif !defined(KORE_OPENGL_ES) || defined(KORE_EMSCRIPTEN)
 		glDrawBuffers(count, buffers);
 #endif
@@ -1083,11 +1121,10 @@ void kinc_g4_restore_render_target() {
 #endif
 }
 
-#if (defined(KORE_OPENGL) && !defined(KORE_PI) && !defined(KORE_ANDROID)) || (defined(KORE_ANDROID) && KORE_ANDROID_API >= 18)
 bool kinc_g4_init_occlusion_query(unsigned *occlusionQuery) {
-#if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID) && KORE_ANDROID_API >= 18
-	if (gles_version >= 3 && glesGenQueries) {
-		glesGenQueries(1, occlusionQuery);
+#if defined(KORE_OPENGL_ES)
+	if (gl_features.queries) {
+		gl.GenQueries(1, occlusionQuery);
 	}
 #else
 	glGenQueries(1, occlusionQuery);
@@ -1096,9 +1133,9 @@ bool kinc_g4_init_occlusion_query(unsigned *occlusionQuery) {
 }
 
 void kinc_g4_delete_occlusion_query(unsigned occlusionQuery) {
-#if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID) && KORE_ANDROID_API >= 18
-	if (gles_version >= 3 && glesGenQueries) {
-		glesDeleteQueries(1, &occlusionQuery);
+#if defined(KORE_OPENGL_ES)
+	if (gl_features.queries) {
+		gl.DeleteQueries(1, &occlusionQuery);
 	}
 #else
 	glDeleteQueries(1, &occlusionQuery);
@@ -1112,12 +1149,12 @@ void kinc_g4_delete_occlusion_query(unsigned occlusionQuery) {
 #endif
 
 void kinc_g4_render_occlusion_query(unsigned occlusionQuery, int triangles) {
-#if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID) && KORE_ANDROID_API >= 18
-	if (gles_version >= 3 && glesGenQueries) {
-		glesBeginQuery(SAMPLES_PASSED, occlusionQuery);
+#if defined(KORE_OPENGL_ES)
+	if (gl_features.queries) {
+		gl.BeginQuery(SAMPLES_PASSED, occlusionQuery);
 		glDrawArrays(GL_TRIANGLES, 0, triangles);
 		glCheckErrors();
-		glesEndQuery(SAMPLES_PASSED);
+		gl.EndQuery(SAMPLES_PASSED);
 	}
 #else
 	glBeginQuery(SAMPLES_PASSED, occlusionQuery);
@@ -1129,9 +1166,9 @@ void kinc_g4_render_occlusion_query(unsigned occlusionQuery, int triangles) {
 
 bool kinc_g4_are_query_results_available(unsigned occlusionQuery) {
 	unsigned available = 0;
-#if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID) && KORE_ANDROID_API >= 18
-	if (gles_version >= 3 && glesGetQueryObjectuiv) {
-		glesGetQueryObjectuiv(occlusionQuery, GL_QUERY_RESULT_AVAILABLE, &available);
+#if defined(KORE_OPENGL_ES)
+	if (gl_features.queries) {
+		gl.GetQueryObjectuiv(occlusionQuery, GL_QUERY_RESULT_AVAILABLE, &available);
 	}
 #else
 	glGetQueryObjectuiv(occlusionQuery, GL_QUERY_RESULT_AVAILABLE, &available);
@@ -1140,15 +1177,14 @@ bool kinc_g4_are_query_results_available(unsigned occlusionQuery) {
 }
 
 void kinc_g4_get_query_results(unsigned occlusionQuery, unsigned *pixelCount) {
-#if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID) && KORE_ANDROID_API >= 18
-	if (gles_version >= 3 && glesGetQueryObjectuiv) {
-		glesGetQueryObjectuiv(occlusionQuery, GL_QUERY_RESULT, pixelCount);
+#if defined(KORE_OPENGL_ES)
+	if (gl_features.queries) {
+		gl.GetQueryObjectuiv(occlusionQuery, GL_QUERY_RESULT, pixelCount);
 	}
 #else
 	glGetQueryObjectuiv(occlusionQuery, GL_QUERY_RESULT, pixelCount);
 #endif
 }
-#endif
 
 void kinc_g4_flush() {
 	glFlush();
@@ -1201,19 +1237,11 @@ int Kinc_G4_Internal_StencilFunc(kinc_g4_compare_mode_t mode) {
 extern bool kinc_internal_gl_has_compute;
 
 bool kinc_g4_supports_instanced_rendering() {
-#if defined(KORE_OPENGL_ES) && defined(KORE_ANDROID)
-#if KORE_ANDROID_API >= 18
-	return glesDrawElementsInstanced != NULL;
-#else
-	return false;
-#endif
-#else
-	return true;
-#endif
+	return gl_features.instanced_rendering;
 }
 
 bool kinc_g4_supports_compute_shaders() {
-	return kinc_internal_gl_has_compute;
+	return gl_features.compute;
 }
 
 bool kinc_g4_supports_blend_constants() {
@@ -1224,7 +1252,7 @@ bool kinc_g4_supports_non_pow2_textures() {
 	// we use OpenGL 2.0+, which should supports NPOT textures.
 	// in practice certain very old hardware doesn't,
 	// but detecting that is not practical
-	return true; 
+	return true;
 }
 
 bool kinc_g4_render_targets_inverted_y(void) {

@@ -3,7 +3,7 @@
 #include <kinc/global.h>
 
 #include <kinc/backend/compute.h>
-#ifdef KORE_OPENGL
+#if defined(KORE_OPENGL) || defined(KORE_OPENGL_ES)
 #include <kinc/backend/graphics4/ShaderStorageBufferImpl.h>
 #endif
 #include <kinc/graphics4/graphics.h>
@@ -63,7 +63,7 @@ KINC_FUNC kinc_compute_constant_location_t kinc_compute_shader_get_constant_loca
 /// <returns>The found texture-unit</returns>
 KINC_FUNC kinc_compute_texture_unit_t kinc_compute_shader_get_texture_unit(kinc_compute_shader_t *shader, const char *name);
 
-#ifdef KORE_OPENGL
+#if defined(KORE_OPENGL) || defined(KORE_OPENGL_ES)
 typedef struct kinc_shader_storage_buffer {
 	kinc_compute_shader_storage_buffer_impl_t impl;
 } kinc_shader_storage_buffer_t;

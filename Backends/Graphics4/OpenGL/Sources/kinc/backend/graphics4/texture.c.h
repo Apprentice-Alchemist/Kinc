@@ -452,14 +452,23 @@ void kinc_g4_texture_init(kinc_g4_texture_t *texture, int width, int height, kin
 	glCheckErrors();
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glCheckErrors();
-
-	if (convertType(format) == GL_FLOAT) {
-		glTexImage2D(GL_TEXTURE_2D, 0, convertInternalFormat(format), texture->tex_width, texture->tex_height, 0, convertFormat(format), GL_FLOAT, NULL);
+#ifdef KORE_OPENGL_ES
+	if (gl_features.compute) {
+		glTexStorage2D(GL_TEXTURE_2D, 1, convertInternalFormat(format), texture->tex_width, texture->tex_height);
 	}
 	else {
-		glTexImage2D(GL_TEXTURE_2D, 0, convertInternalFormat(format), texture->tex_width, texture->tex_height, 0, convertFormat(format), GL_UNSIGNED_BYTE,
-		             NULL);
+#endif
+		if (convertType(format) == GL_FLOAT) {
+			glTexImage2D(GL_TEXTURE_2D, 0, convertInternalFormat(format), texture->tex_width, texture->tex_height, 0, convertFormat(format), GL_FLOAT, NULL);
+		}
+		else {
+			glTexImage2D(GL_TEXTURE_2D, 0, convertInternalFormat(format), texture->tex_width, texture->tex_height, 0, convertFormat(format), GL_UNSIGNED_BYTE,
+			             NULL);
+		}
+#ifdef KORE_OPENGL_ES
 	}
+#endif
+
 	glCheckErrors();
 }
 
@@ -522,10 +531,10 @@ void Kinc_G4_Internal_TextureSet(kinc_g4_texture_t *texture, kinc_g4_texture_uni
 }
 
 void Kinc_G4_Internal_TextureImageSet(kinc_g4_texture_t *texture, kinc_g4_texture_unit_t unit) {
-#if defined(KORE_WINDOWS) || (defined(KORE_LINUX) && defined(GL_VERSION_4_4))
-	glBindImageTexture(unit.impl.unit, texture->impl.texture, 0, GL_FALSE, 0, GL_WRITE_ONLY, convertInternalFormat(texture->format));
-	glCheckErrors();
-#endif
+	if (gl_features.bind_image_texture) {
+		glBindImageTexture(unit.impl.unit, texture->impl.texture, 0, GL_FALSE, 0, GL_WRITE_ONLY, convertInternalFormat(texture->format));
+		glCheckErrors();
+	}
 }
 
 int kinc_g4_texture_stride(kinc_g4_texture_t *texture) {
@@ -571,16 +580,16 @@ void kinc_g4_texture_unlock(kinc_g4_texture_t *texture) {
 }
 
 void kinc_g4_texture_clear(kinc_g4_texture_t *texture, int x, int y, int z, int width, int height, int depth, unsigned color) {
-#ifdef GL_VERSION_4_4
-	static float clearColor[4];
-	clearColor[0] = ((color & 0x00ff0000) >> 16) / 255.0f;
-	clearColor[1] = ((color & 0x0000ff00) >> 8) / 255.0f;
-	clearColor[2] = (color & 0x000000ff) / 255.0f;
-	clearColor[3] = ((color & 0xff000000) >> 24) / 255.0f;
-	GLenum target = depth > 1 ? GL_TEXTURE_3D : GL_TEXTURE_2D;
-	glBindTexture(target, texture->impl.texture);
-	glClearTexSubImage(texture->impl.texture, 0, x, y, z, width, height, depth, convertFormat(texture->format), convertType(texture->format), clearColor);
-#endif
+	#if defined(GL_VERSION_4_4) && !defined(KORE_OPENGL_ES)
+		static float clearColor[4];
+		clearColor[0] = ((color & 0x00ff0000) >> 16) / 255.0f;
+		clearColor[1] = ((color & 0x0000ff00) >> 8) / 255.0f;
+		clearColor[2] = (color & 0x000000ff) / 255.0f;
+		clearColor[3] = ((color & 0xff000000) >> 24) / 255.0f;
+		GLenum target = depth > 1 ? GL_TEXTURE_3D : GL_TEXTURE_2D;
+		glBindTexture(target, texture->impl.texture);
+		glClearTexSubImage(texture->impl.texture, 0, x, y, z, width, height, depth, convertFormat(texture->format), convertType(texture->format), clearColor);
+	#endif
 }
 
 #if defined(KORE_IOS) || defined(KORE_MACOS)
