@@ -1,3 +1,5 @@
+#include <GL/gl.h>
+#include <GL/glext.h>
 #include <kinc/graphics4/rendertarget.h>
 
 #include "ogl.h"
@@ -150,6 +152,67 @@ static void setupDepthStencil(kinc_g4_render_target_t *renderTarget, GLenum texT
 	}
 }
 
+static GLint rt_to_internal_format(kinc_g4_render_target_format_t format) {
+	switch (format) {
+	case KINC_G4_RENDER_TARGET_FORMAT_64BIT_FLOAT:
+		return GL_RGBA16F;
+	case KINC_G4_RENDER_TARGET_FORMAT_32BIT_RED_FLOAT:
+		return GL_R32F;
+	case KINC_G4_RENDER_TARGET_FORMAT_128BIT_FLOAT:
+		return GL_RGBA32F;
+	case KINC_G4_RENDER_TARGET_FORMAT_16BIT_DEPTH:
+		return GL_DEPTH_COMPONENT16;
+	case KINC_G4_RENDER_TARGET_FORMAT_8BIT_RED:
+		return GL_R8;
+	case KINC_G4_RENDER_TARGET_FORMAT_16BIT_RED_FLOAT:
+		return GL_R16F;
+	case KINC_G4_RENDER_TARGET_FORMAT_32BIT:
+	default:
+		return GL_RGBA8;
+	}
+}
+
+static GLint rt_to_format(kinc_g4_render_target_format_t format) {
+	switch (format) {
+	case KINC_G4_RENDER_TARGET_FORMAT_16BIT_DEPTH:
+		return GL_DEPTH_COMPONENT;
+
+	case KINC_G4_RENDER_TARGET_FORMAT_32BIT_RED_FLOAT:
+	case KINC_G4_RENDER_TARGET_FORMAT_8BIT_RED:
+		return GL_RED;
+
+	case KINC_G4_RENDER_TARGET_FORMAT_16BIT_RED_FLOAT:
+		return GL_RG;
+
+	case KINC_G4_RENDER_TARGET_FORMAT_32BIT:
+	case KINC_G4_RENDER_TARGET_FORMAT_64BIT_FLOAT:
+	case KINC_G4_RENDER_TARGET_FORMAT_128BIT_FLOAT:
+	default:
+		return GL_RGBA;
+	}
+}
+
+static GLint rt_to_type(kinc_g4_render_target_format_t format) {
+	switch (format) {
+
+	case KINC_G4_RENDER_TARGET_FORMAT_16BIT_RED_FLOAT:
+	case KINC_G4_RENDER_TARGET_FORMAT_64BIT_FLOAT:
+		return GL_HALF_FLOAT;
+
+	case KINC_G4_RENDER_TARGET_FORMAT_32BIT_RED_FLOAT:
+	case KINC_G4_RENDER_TARGET_FORMAT_128BIT_FLOAT:
+		return GL_FLOAT;
+
+	case KINC_G4_RENDER_TARGET_FORMAT_16BIT_DEPTH:
+		return GL_UNSIGNED_INT;
+
+	case KINC_G4_RENDER_TARGET_FORMAT_8BIT_RED:
+	case KINC_G4_RENDER_TARGET_FORMAT_32BIT:
+	default:
+		return GL_UNSIGNED_BYTE;
+	}
+}
+
 void kinc_g4_render_target_init_with_multisampling(kinc_g4_render_target_t *renderTarget, int width, int height, kinc_g4_render_target_format_t format,
                                                    int depthBufferBits, int stencilBufferBits, int samples_per_pixel) {
 	renderTarget->width = width;
@@ -184,45 +247,14 @@ void kinc_g4_render_target_init_with_multisampling(kinc_g4_render_target_t *rend
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glCheckErrors();
 
-	switch (format) {
-	case KINC_G4_RENDER_TARGET_FORMAT_128BIT_FLOAT:
-#ifdef KORE_OPENGL_ES
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F_EXT, renderTarget->texWidth, renderTarget->texHeight, 0, GL_RGBA, GL_FLOAT, 0);
-#else
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, renderTarget->texWidth, renderTarget->texHeight, 0, GL_RGBA, GL_FLOAT, 0);
-#endif
-		break;
-	case KINC_G4_RENDER_TARGET_FORMAT_64BIT_FLOAT:
-#ifdef KORE_OPENGL_ES
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F_EXT, renderTarget->texWidth, renderTarget->texHeight, 0, GL_RGBA, GL_HALF_FLOAT, 0);
-#else
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, renderTarget->texWidth, renderTarget->texHeight, 0, GL_RGBA, GL_HALF_FLOAT, 0);
-#endif
-		break;
-	case KINC_G4_RENDER_TARGET_FORMAT_16BIT_DEPTH:
+	if (format == KINC_G4_RENDER_TARGET_FORMAT_16BIT_DEPTH) {
 #ifdef KORE_OPENGL_ES
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 #endif
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT16, renderTarget->texWidth, renderTarget->texHeight, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, 0);
-		break;
-	case KINC_G4_RENDER_TARGET_FORMAT_8BIT_RED:
-#ifdef KORE_IOS
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, renderTarget->texWidth, renderTarget->texHeight, 0, GL_RED, GL_UNSIGNED_BYTE, 0);
-#else
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, renderTarget->texWidth, renderTarget->texHeight, 0, GL_RED, GL_UNSIGNED_BYTE, 0);
-#endif
-		break;
-	case KINC_G4_RENDER_TARGET_FORMAT_16BIT_RED_FLOAT:
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_R16F_EXT, renderTarget->texWidth, renderTarget->texHeight, 0, GL_RED, GL_HALF_FLOAT, 0);
-		break;
-	case KINC_G4_RENDER_TARGET_FORMAT_32BIT_RED_FLOAT:
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F_EXT, renderTarget->texWidth, renderTarget->texHeight, 0, GL_RED, GL_FLOAT, 0);
-		break;
-	case KINC_G4_RENDER_TARGET_FORMAT_32BIT:
-	default:
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, renderTarget->texWidth, renderTarget->texHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 	}
+	glTexImage2D(GL_TEXTURE_2D, 0, rt_to_internal_format(format), renderTarget->texWidth, renderTarget->texHeight, 0, rt_to_format(format), rt_to_type(format),
+	             NULL);
 
 	glCheckErrors();
 	glGenFramebuffers(1, &renderTarget->impl._framebuffer);
@@ -285,41 +317,16 @@ void kinc_g4_render_target_init_cube_with_multisampling(kinc_g4_render_target_t 
 	glCheckErrors();
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glCheckErrors();
-
-	switch (format) {
-	case KINC_G4_RENDER_TARGET_FORMAT_128BIT_FLOAT:
-#ifdef KORE_OPENGL_ES
-		for (int i = 0; i < 6; i++)
-			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA32F_EXT, renderTarget->texWidth, renderTarget->texHeight, 0, GL_RGBA, GL_FLOAT, 0);
-#else
-		for (int i = 0; i < 6; i++)
-			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA32F, renderTarget->texWidth, renderTarget->texHeight, 0, GL_RGBA, GL_FLOAT, 0);
-#endif
-		break;
-	case KINC_G4_RENDER_TARGET_FORMAT_64BIT_FLOAT:
-#ifdef KORE_OPENGL_ES
-		for (int i = 0; i < 6; i++)
-			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA16F_EXT, renderTarget->texWidth, renderTarget->texHeight, 0, GL_RGBA, GL_HALF_FLOAT, 0);
-#else
-		for (int i = 0; i < 6; i++)
-			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA16F, renderTarget->texWidth, renderTarget->texHeight, 0, GL_RGBA, GL_HALF_FLOAT, 0);
-#endif
-		break;
-	case KINC_G4_RENDER_TARGET_FORMAT_16BIT_DEPTH:
+	if (format == KINC_G4_RENDER_TARGET_FORMAT_16BIT_DEPTH) {
 #ifdef KORE_OPENGL_ES
 		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 #endif
-		for (int i = 0; i < 6; i++)
-			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_DEPTH_COMPONENT16, renderTarget->texWidth, renderTarget->texHeight, 0, GL_DEPTH_COMPONENT,
-			             GL_UNSIGNED_INT, 0);
-		break;
-	case KINC_G4_RENDER_TARGET_FORMAT_32BIT:
-	default:
-		for (int i = 0; i < 6; i++)
-			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, renderTarget->texWidth, renderTarget->texHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 	}
-
+	for (int i = 0; i < 6; i++) {
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, rt_to_internal_format(format), renderTarget->texWidth, renderTarget->texHeight, 0,
+		             rt_to_format(format), rt_to_type(format), NULL);
+	}
 	glCheckErrors();
 	glGenFramebuffers(1, &renderTarget->impl._framebuffer);
 	glCheckErrors();
@@ -356,6 +363,7 @@ void kinc_g4_render_target_destroy(kinc_g4_render_target_t *renderTarget) {
 	GLuint framebuffers[] = {renderTarget->impl._framebuffer};
 	glDeleteFramebuffers(1, framebuffers);
 }
+
 void kinc_g4_render_target_use_color_as_texture(kinc_g4_render_target_t *renderTarget, kinc_g4_texture_unit_t unit) {
 	glActiveTexture(GL_TEXTURE0 + unit.impl.unit);
 	glCheckErrors();
@@ -379,26 +387,7 @@ void kinc_g4_render_target_set_depth_stencil_from(kinc_g4_render_target_t *rende
 
 void kinc_g4_render_target_get_pixels(kinc_g4_render_target_t *renderTarget, uint8_t *data) {
 	glBindFramebuffer(GL_FRAMEBUFFER, renderTarget->impl._framebuffer);
-	switch ((kinc_g4_render_target_format_t)renderTarget->impl.format) {
-	case KINC_G4_RENDER_TARGET_FORMAT_128BIT_FLOAT:
-		glReadPixels(0, 0, renderTarget->texWidth, renderTarget->texHeight, GL_RGBA, GL_FLOAT, data);
-		break;
-	case KINC_G4_RENDER_TARGET_FORMAT_64BIT_FLOAT:
-		glReadPixels(0, 0, renderTarget->texWidth, renderTarget->texHeight, GL_RGBA, GL_HALF_FLOAT, data);
-		break;
-	case KINC_G4_RENDER_TARGET_FORMAT_8BIT_RED:
-		glReadPixels(0, 0, renderTarget->texWidth, renderTarget->texHeight, GL_RED, GL_UNSIGNED_BYTE, data);
-		break;
-	case KINC_G4_RENDER_TARGET_FORMAT_16BIT_RED_FLOAT:
-		glReadPixels(0, 0, renderTarget->texWidth, renderTarget->texHeight, GL_RED, GL_HALF_FLOAT, data);
-		break;
-	case KINC_G4_RENDER_TARGET_FORMAT_32BIT_RED_FLOAT:
-		glReadPixels(0, 0, renderTarget->texWidth, renderTarget->texHeight, GL_RED, GL_FLOAT, data);
-		break;
-	case KINC_G4_RENDER_TARGET_FORMAT_32BIT:
-	default:
-		glReadPixels(0, 0, renderTarget->texWidth, renderTarget->texHeight, GL_RGBA, GL_UNSIGNED_BYTE, data);
-	}
+	glReadPixels(0, 0, renderTarget->texWidth, renderTarget->texHeight, rt_to_format(renderTarget->impl.format), rt_to_type(renderTarget->impl.format), data);
 }
 
 void kinc_g4_render_target_generate_mipmaps(kinc_g4_render_target_t *renderTarget, int levels) {
