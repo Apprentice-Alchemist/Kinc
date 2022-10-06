@@ -8,9 +8,6 @@ extern "C" {
 
 typedef struct {
 	unsigned int texture;
-#ifdef KORE_ANDROID
-	bool external_oes;
-#endif
 	uint8_t pixfmt;
 } kinc_g4_texture_impl_t;
 

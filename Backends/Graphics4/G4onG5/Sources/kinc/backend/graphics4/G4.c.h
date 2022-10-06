@@ -22,6 +22,7 @@
 #include <kinc/math/core.h>
 #include <kinc/math/matrix.h>
 #include <kinc/system.h>
+#include <kinc/video.h>
 
 #include <assert.h>
 #include <string.h>
@@ -106,6 +107,10 @@ typedef struct render_state {
 	kinc_g5_texture_unit_t depth_render_target_units[MAX_TEXTURES];
 	int depth_render_target_count;
 
+	kinc_video_texture_t *video_textures[MAX_TEXTURES];
+	kinc_g5_texture_unit_t video_texture_units[MAX_TEXTURES];
+	int video_texture_count;
+
 	uint8_t vertex_constant_data[constantBufferSize];
 	uint8_t fragment_constant_data[constantBufferSize];
 } render_state;
@@ -138,6 +143,8 @@ void kinc_g4_internal_init_window(int window, int depthBufferBits, int stencilBu
 	// to support doing work after kinc_g4_end and before kinc_g4_begin
 	kinc_g5_command_list_begin(&commandList);
 }
+
+static kinc_g5_sampler_t *get_current_sampler(int stage, int unit);
 
 void kinc_g4_on_g5_internal_set_samplers(int count, kinc_g5_texture_unit_t *texture_units) {
 	for (int i = 0; i < count; ++i) {
@@ -214,6 +221,9 @@ static void endDraw() {
 		}
 		for (int i = 0; i < current_state.texture_count; ++i) {
 			kinc_g5_command_list_set_texture(&commandList, current_state.texture_units[i], current_state.textures[i]);
+		}
+		for (int i = 0; i < current_state.video_texture_count; ++i) {
+			kinc_g5_command_list_set_video_texture(&commandList, current_state.video_texture_units[i], current_state.video_textures[i]);
 		}
 		for (int i = 0; i < current_state.render_target_count; ++i) {
 			kinc_g5_command_list_set_texture_from_render_target(&commandList, current_state.render_target_units[i], current_state.render_targets[i]);
@@ -648,6 +658,29 @@ void kinc_g4_set_texture(kinc_g4_texture_unit_t unit, kinc_g4_texture_t *texture
 	}
 
 	kinc_g5_command_list_set_texture(&commandList, g5_unit, &texture->impl._texture);
+}
+
+void kinc_g4_set_video_texture(kinc_g4_texture_unit_t unit, struct kinc_video_texture *texture) {
+	assert(KINC_G4_SHADER_TYPE_COUNT == KINC_G5_SHADER_TYPE_COUNT);
+	kinc_g5_texture_unit_t g5_unit;
+	memcpy(&g5_unit.stages[0], &unit.stages[0], KINC_G5_SHADER_TYPE_COUNT * sizeof(int));
+
+	bool found = false;
+	for (int i = 0; i < current_state.video_texture_count; ++i) {
+		if (kinc_g5_texture_unit_equals(&current_state.video_texture_units[i], &g5_unit)) {
+			current_state.video_textures[i] = texture;
+			current_state.video_texture_units[i] = g5_unit;
+			found = true;
+			break;
+		}
+	}
+	if (!found) {
+		assert(current_state.video_texture_count < MAX_TEXTURES);
+		current_state.video_textures[current_state.texture_count] = texture;
+		current_state.video_texture_units[current_state.texture_count] = g5_unit;
+		current_state.video_texture_count += 1;
+	}
+	kinc_g5_command_list_set_video_texture(&commandList, g5_unit, texture);
 }
 
 void kinc_g4_set_image_texture(kinc_g4_texture_unit_t unit, kinc_g4_texture_t *texture) {}

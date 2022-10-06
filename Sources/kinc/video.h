@@ -61,11 +61,15 @@ KINC_FUNC int kinc_video_width(kinc_video_t *video);
 /// <returns>The height of the video in pixels</returns>
 KINC_FUNC int kinc_video_height(kinc_video_t *video);
 
+typedef struct kinc_video_texture {
+	kinc_video_texture_impl_t impl;
+} kinc_video_texture_t;
+
 /// <summary>
-/// Gets the current image of a playing video which can be rendered using any of Kinc's graphics APIs.
+/// Gets the current image of a playing video as an external texture that can be imported by Kinc's graphics apis.
 /// </summary>
-/// <returns>The current image of a playing video</returns>
-KINC_FUNC kinc_g4_texture_t *kinc_video_current_image(kinc_video_t *video);
+/// <returns>Wether an image was actually available.</returns>
+KINC_FUNC bool kinc_video_current_image(kinc_video_t *video, kinc_video_texture_t *vtex);
 
 /// <summary>
 /// Gets the duration of the video in seconds.

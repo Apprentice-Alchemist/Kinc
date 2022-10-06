@@ -19,6 +19,11 @@ struct vk_funs {
 
 	PFN_vkQueuePresentKHR fpQueuePresentKHR;
 	PFN_vkAcquireNextImageKHR fpAcquireNextImageKHR;
+
+	#ifdef KORE_ANDROID
+	PFN_vkGetAndroidHardwareBufferPropertiesANDROID fpGetAndroidHardwareBufferPropertiesANDROID;
+	PFN_vkCreateSamplerYcbcrConversion fpCreateSamplerYcbcrConversionKHR;
+#endif
 };
 
 struct vk_depth {

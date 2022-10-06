@@ -3,6 +3,7 @@
 #include <kinc/graphics5/texture.h>
 #include <kinc/image.h>
 #include <kinc/log.h>
+#include <vulkan/vulkan_core.h>
 
 bool use_staging_buffer = false;
 
@@ -416,3 +417,147 @@ void kinc_g5_texture_clear(kinc_g5_texture_t *texture, int x, int y, int z, int 
 void kinc_g5_texture_generate_mipmaps(kinc_g5_texture_t *texture, int levels) {}
 
 void kinc_g5_texture_set_mipmap(kinc_g5_texture_t *texture, kinc_image_t *mipmap, int level) {}
+
+#ifdef KORE_ANDROID
+#undef __ANDROID_API__
+#define __ANDROID_API__ 26
+#include <android/hardware_buffer.h>
+#include <kinc/video.h>
+
+void kinc_vulkan_init_video_texture(kinc_video_texture_impl_t *tex, AHardwareBuffer *hw_buf, AHardwareBuffer_Desc hw_buf_desc) {
+	VkResult result;
+
+	VkAndroidHardwareBufferFormatPropertiesANDROID hw_buf_format_props = {0};
+	hw_buf_format_props.sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_ANDROID;
+	VkAndroidHardwareBufferPropertiesANDROID hw_buf_props = {0};
+	hw_buf_props.sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID;
+	hw_buf_props.pNext = &hw_buf_format_props;
+
+	result = vk.fpGetAndroidHardwareBufferPropertiesANDROID(vk_ctx.device, hw_buf, &hw_buf_props);
+	assert(result == VK_SUCCESS);
+	VkFormat format = hw_buf_format_props.format;
+	uint64_t external_format = hw_buf_format_props.externalFormat;
+
+	VkExternalFormatANDROID android_format = {0};
+	android_format.sType = VK_STRUCTURE_TYPE_EXTERNAL_FORMAT_ANDROID;
+	android_format.pNext = NULL;
+	android_format.externalFormat = external_format;
+
+	VkExternalMemoryImageCreateInfo ex_mem_create_info = {0};
+	ex_mem_create_info.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+	ex_mem_create_info.pNext = &android_format;
+	ex_mem_create_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID;
+
+	VkImageCreateInfo img_info = {0};
+	img_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	img_info.pNext = &ex_mem_create_info;
+	img_info.flags = 0;
+	img_info.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+	img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+	img_info.imageType = VK_IMAGE_TYPE_2D;
+	img_info.extent.width = tex->texture.impl.texture.tex_width = hw_buf_desc.width;
+	img_info.extent.height = tex->texture.impl.texture.tex_height = hw_buf_desc.height;
+	img_info.extent.depth = hw_buf_desc.layers;
+	img_info.format = format;
+	img_info.initialLayout = tex->texture.impl.texture.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	img_info.samples = 1;
+	img_info.arrayLayers = 1;
+	img_info.mipLevels = 1;
+
+	VkSamplerYcbcrConversionCreateInfo ycbr_conv_create_info = {0};
+	ycbr_conv_create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_CREATE_INFO;
+	ycbr_conv_create_info.pNext = &android_format;
+	ycbr_conv_create_info.ycbcrModel = hw_buf_format_props.suggestedYcbcrModel;
+	ycbr_conv_create_info.ycbcrRange = hw_buf_format_props.suggestedYcbcrRange;
+	ycbr_conv_create_info.format = hw_buf_format_props.format;
+	ycbr_conv_create_info.components = hw_buf_format_props.samplerYcbcrConversionComponents;
+	ycbr_conv_create_info.xChromaOffset = hw_buf_format_props.suggestedXChromaOffset;
+	ycbr_conv_create_info.yChromaOffset = hw_buf_format_props.suggestedYChromaOffset;
+	ycbr_conv_create_info.chromaFilter = VK_FILTER_LINEAR;
+
+	VkSamplerYcbcrConversion ycbr_conversion;
+
+	result = vk.fpCreateSamplerYcbcrConversionKHR(vk_ctx.device, &ycbr_conv_create_info, NULL, &ycbr_conversion);
+	assert(result == VK_SUCCESS);
+
+	VkSamplerYcbcrConversionInfo ycbr_conversion_info;
+	ycbr_conversion_info.sType = VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_INFO;
+	ycbr_conversion_info.pNext = NULL;
+	ycbr_conversion_info.conversion = ycbr_conversion;
+
+	VkSamplerCreateInfo sampler = {0};
+	sampler.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	sampler.pNext = &ycbr_conversion_info;
+	sampler.magFilter = VK_FILTER_LINEAR;
+	sampler.minFilter = VK_FILTER_LINEAR;
+	sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	sampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	sampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	sampler.mipLodBias = 0.0f;
+	sampler.anisotropyEnable = VK_FALSE;
+	sampler.maxAnisotropy = 1;
+	sampler.compareOp = VK_COMPARE_OP_NEVER;
+	sampler.minLod = 0.0f;
+	sampler.maxLod = 0.0f;
+	sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+	sampler.unnormalizedCoordinates = VK_FALSE;
+
+	result = vkCreateSampler(vk_ctx.device, &sampler, NULL, &tex->sampler.impl.sampler);
+	assert(result == VK_SUCCESS);
+	result = vkCreateImage(vk_ctx.device, &img_info, NULL, &tex->texture.impl.texture.image);
+	assert(result == VK_SUCCESS);
+
+	VkImportAndroidHardwareBufferInfoANDROID import_hw_buf = {0};
+	import_hw_buf.sType = VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID;
+	import_hw_buf.pNext = NULL;
+	import_hw_buf.buffer = hw_buf;
+
+	VkMemoryDedicatedAllocateInfo dedicated_alloc_info = {0};
+	dedicated_alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
+	dedicated_alloc_info.pNext = &import_hw_buf;
+	dedicated_alloc_info.image = tex->texture.impl.texture.image;
+
+	VkMemoryAllocateInfo alloc_info = {0};
+	alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	alloc_info.pNext = &dedicated_alloc_info;
+	alloc_info.allocationSize = hw_buf_props.allocationSize;
+
+	memory_type_from_properties(hw_buf_props.memoryTypeBits, 0, &alloc_info.memoryTypeIndex);
+
+	result = vkAllocateMemory(vk_ctx.device, &alloc_info, NULL, &tex->texture.impl.texture.mem);
+	assert(result == VK_SUCCESS);
+
+	result = vkBindImageMemory(vk_ctx.device, tex->texture.impl.texture.image, tex->texture.impl.texture.mem, 0);
+	assert(result == VK_SUCCESS);
+
+	VkImageViewCreateInfo image_view_info = {0};
+	image_view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	image_view_info.pNext = &ycbr_conversion_info;
+	image_view_info.flags = 0;
+	image_view_info.format = format;
+	image_view_info.image = tex->texture.impl.texture.image;
+	image_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	image_view_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+	image_view_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+	image_view_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+	image_view_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+	image_view_info.subresourceRange.baseArrayLayer = 0;
+	image_view_info.subresourceRange.baseMipLevel = 0;
+	image_view_info.subresourceRange.layerCount = 1;
+	image_view_info.subresourceRange.levelCount = 1;
+	image_view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+	result = vkCreateImageView(vk_ctx.device, &image_view_info, NULL, &tex->texture.impl.texture.view);
+	assert(result == VK_SUCCESS);
+
+	set_image_layout(tex->texture.impl.texture.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	flush_init_cmd();
+}
+
+void kinc_vulkan_delete_video_texture(kinc_video_texture_impl_t *tex) {
+	vkDestroyImageView(vk_ctx.device, tex->texture.impl.texture.view, NULL);
+	vkDestroyImage(vk_ctx.device, tex->texture.impl.texture.image, NULL);
+	vkFreeMemory(vk_ctx.device, tex->texture.impl.texture.mem, NULL);
+}
+#endif

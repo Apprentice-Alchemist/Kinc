@@ -28,6 +28,7 @@ struct vk_context vk_ctx = {0};
 #endif
 
 void kinc_vulkan_get_instance_extensions(const char **extensions, int *index, int max);
+void kinc_vulkan_get_device_extensions(const char **extensions, int *index, int max);
 VkBool32 kinc_vulkan_get_physical_device_presentation_support(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIndex);
 VkResult kinc_vulkan_create_surface(VkInstance instance, int window_index, VkSurfaceKHR *surface);
 
@@ -71,7 +72,7 @@ static VkBool32 vkDebugUtilsMessengerCallbackEXT(VkDebugUtilsMessageSeverityFlag
                                                  const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData) {
 	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
 		kinc_log(KINC_LOG_LEVEL_ERROR, "Vulkan ERROR: Code %d : %s", pCallbackData->messageIdNumber, pCallbackData->pMessage);
-		kinc_debug_break();
+		//kinc_debug_break();
 	}
 	else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
 		kinc_log(KINC_LOG_LEVEL_WARNING, "Vulkan WARNING: Code %d : %s", pCallbackData->messageIdNumber, pCallbackData->pMessage);
@@ -611,7 +612,12 @@ static bool check_extensions(const char **wanted_extensions, int wanted_extensio
 
 	for (int i = 0; i < wanted_extension_count; i++) {
 		if (!found_extensions[i]) {
-			kinc_log(KINC_LOG_LEVEL_ERROR, "Failed to find extension %s", wanted_extensions[i]);
+			#ifdef VALIDATE
+			if (!strcmp(wanted_extensions[i], VK_EXT_DEBUG_UTILS_EXTENSION_NAME) && vk_ctx.validation_found) {
+				continue;
+			}
+			#endif
+				kinc_log(KINC_LOG_LEVEL_ERROR, "Failed to find extension %s", wanted_extensions[i]);
 			missing_extensions = true;
 		}
 	}
@@ -800,6 +806,9 @@ void kinc_g5_internal_init() {
 	wanted_device_extensions[wanted_device_extension_count++] = VK_KHR_SPIRV_1_4_EXTENSION_NAME;
 	wanted_device_extensions[wanted_device_extension_count++] = VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME;
 #endif
+#ifdef KORE_ANDROID
+	kinc_vulkan_get_device_extensions(wanted_device_extensions, &wanted_device_extension_count, sizeof wanted_device_extensions);
+#endif
 
 	uint32_t device_extension_count = 0;
 
@@ -847,6 +856,10 @@ void kinc_g5_internal_init() {
 	GET_INSTANCE_PROC_ADDR(vk_ctx.instance, GetSwapchainImagesKHR);
 	GET_INSTANCE_PROC_ADDR(vk_ctx.instance, AcquireNextImageKHR);
 	GET_INSTANCE_PROC_ADDR(vk_ctx.instance, QueuePresentKHR);
+#ifdef KORE_ANDROID
+	GET_INSTANCE_PROC_ADDR(vk_ctx.instance, GetAndroidHardwareBufferPropertiesANDROID);
+	GET_INSTANCE_PROC_ADDR(vk_ctx.instance, CreateSamplerYcbcrConversionKHR);
+#endif
 
 	vkGetPhysicalDeviceProperties(vk_ctx.gpu, &gpu_props);
 
@@ -952,7 +965,15 @@ void kinc_g5_internal_init() {
 			deviceinfo.pNext = &bufferDeviceAddressExt;
 #endif
 
-			err = vkCreateDevice(vk_ctx.gpu, &deviceinfo, NULL, &vk_ctx.device);
+#ifdef KORE_ANDROID
+			VkPhysicalDeviceSamplerYcbcrConversionFeatures ycbrSamplerExt = {0};
+			ycbrSamplerExt.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES;
+			ycbrSamplerExt.pNext = (void*)deviceinfo.pNext;
+			ycbrSamplerExt.samplerYcbcrConversion = VK_TRUE;
+			deviceinfo.pNext = &ycbrSamplerExt;
+#endif
+
+			    err = vkCreateDevice(vk_ctx.gpu, &deviceinfo, NULL, &vk_ctx.device);
 			assert(!err);
 		}
 

@@ -48,7 +48,7 @@
 
 #endif
 
-#ifndef NDEBUG
+#if !defined(NDEBUG)
 #define VALIDATE
 #endif
 

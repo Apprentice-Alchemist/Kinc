@@ -285,10 +285,10 @@ else if (platform === Platform.Android) {
 	}
 	project.addLib('log');
 	project.addLib('android');
+	project.addLib('mediandk');
 	project.addLib('EGL');
 	project.addLib('GLESv2');
 	project.addLib('OpenSLES');
-	project.addLib('OpenMAXAL');
 }
 else if (platform === Platform.Emscripten) {
 	project.addDefine('KORE_EMSCRIPTEN');

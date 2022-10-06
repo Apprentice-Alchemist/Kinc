@@ -18,6 +18,7 @@
 #include <kinc/log.h>
 #include <kinc/math/core.h>
 #include <kinc/system.h>
+#include <kinc/video.h>
 #include <kinc/window.h>
 
 #include "OpenGLWindow.h"
@@ -797,6 +798,13 @@ void kinc_g4_set_texture(kinc_g4_texture_unit_t unit, kinc_g4_texture_t *texture
 
 void kinc_g4_set_image_texture(kinc_g4_texture_unit_t unit, kinc_g4_texture_t *texture) {
 	Kinc_G4_Internal_TextureImageSet(texture, unit);
+}
+
+void kinc_g4_set_video_texture(kinc_g4_texture_unit_t unit, struct kinc_video_texture *texture) {
+	glActiveTexture(GL_TEXTURE0 + unit.stages[KINC_G4_SHADER_TYPE_FRAGMENT]);
+	glCheckErrors();
+	glBindTexture(GL_TEXTURE_EXTERNAL_OES, texture->impl.oes_id);
+	glCheckErrors();
 }
 
 int kinc_g4_max_bound_textures(void) {

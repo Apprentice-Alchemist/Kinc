@@ -290,6 +290,16 @@ KINC_FUNC void kinc_g5_command_list_set_texture(kinc_g5_command_list_t *list, ki
 /// <param name="texture">The texture to assign to the unit</param>
 KINC_FUNC void kinc_g5_command_list_set_image_texture(kinc_g5_command_list_t *list, kinc_g5_texture_unit_t unit, kinc_g5_texture_t *texture);
 
+struct kinc_video_texture;
+
+/// <summary>
+/// Assigns a video texture to a texture-unit for sampled access.
+/// </summary>
+/// <param name="list">The list to write the command to</param>
+/// <param name="unit">The unit to assign this texture to</param>
+/// <param name="texture">The texture to assign to the unit</param>
+KINC_FUNC void kinc_g5_command_list_set_video_texture(kinc_g5_command_list_t *list, kinc_g5_texture_unit_t unit, struct kinc_video_texture *texture);
+
 /// <summary>
 /// Uses the color-component of a render-target as a texture.
 /// </summary>

@@ -372,6 +372,10 @@ KINC_FUNC void kinc_g4_set_texture(kinc_g4_texture_unit_t unit, struct kinc_g4_t
 /// <param name="texture">The texture to assign to the unit</param>
 KINC_FUNC void kinc_g4_set_image_texture(kinc_g4_texture_unit_t unit, struct kinc_g4_texture *texture);
 
+struct kinc_video_texture;
+
+KINC_FUNC void kinc_g4_set_video_texture(kinc_g4_texture_unit_t unit, struct kinc_video_texture *texture);
+
 KINC_FUNC bool kinc_g4_init_occlusion_query(unsigned *occlusionQuery);
 
 KINC_FUNC void kinc_g4_delete_occlusion_query(unsigned occlusionQuery);

@@ -1,3 +1,8 @@
+#include <android/api-level.h>
+#include <dlfcn.h>
+
+#include <time.h>
+#include <string.h>
 #define EGL_NO_PLATFORM_SPECIFIC_TYPES
 #include <EGL/egl.h>
 #include <kinc/error.h>
@@ -73,8 +78,21 @@ VkResult kinc_vulkan_create_surface(VkInstance instance, int window_index, VkSur
 }
 
 void kinc_vulkan_get_instance_extensions(const char **names, int *index, int max) {
-	assert(*index + 1 < max);
+	assert(*index + 3 < max);
 	names[(*index)++] = VK_KHR_ANDROID_SURFACE_EXTENSION_NAME;
+	names[(*index)++] = VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME;
+	names[(*index)++] = VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
+}
+
+void kinc_vulkan_get_device_extensions(const char **names, int *index, int max) {
+	assert(*index + 5 < max);
+	names[(*index)++] = VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME;
+	names[(*index)++] = VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME;
+	names[(*index)++] = VK_KHR_BIND_MEMORY_2_EXTENSION_NAME;
+	names[(*index)++] = VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME;
+	names[(*index)++] = VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME;
+	names[(*index)++] = VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME;
+	names[(*index)++] = VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME;
 }
 
 VkBool32 kinc_vulkan_get_physical_device_presentation_support(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIndex) {
@@ -1024,15 +1042,15 @@ double kinc_frequency() {
 }
 
 kinc_ticks_t kinc_timestamp() {
-	struct timeval now;
-	gettimeofday(&now, NULL);
-	return (kinc_ticks_t)(now.tv_sec - start_sec) * 1000000 + (kinc_ticks_t)(now.tv_usec);
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	return (kinc_ticks_t)(now.tv_sec - start_sec) * 1000000000 + (kinc_ticks_t)(now.tv_nsec);
 }
 
 double kinc_time() {
-	struct timeval now;
-	gettimeofday(&now, NULL);
-	return (double)(now.tv_sec - start_sec) + (now.tv_usec / 1000000.0);
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	return (double)(now.tv_sec - start_sec) + (now.tv_nsec / 1000000000.0);
 }
 
 void kinc_internal_resize(int window, int width, int height);
@@ -1130,26 +1148,34 @@ bool kinc_gamepad_connected(int num) {
 void kinc_gamepad_rumble(int gamepad, float left, float right) {}
 
 void initAndroidFileReader();
-void KoreAndroidVideoInit();
 
 void android_main(struct android_app *application) {
 	app_dummy();
 
-	struct timeval now;
-	gettimeofday(&now, NULL);
+	device_api_level = android_get_device_api_level();
+
+	#define DEFINE_LIB(lib, api_level, so) void *lib = NULL; if(device_api_level >= api_level) lib = dlopen(so, RTLD_LAZY);
+	#define DEFINE_FUN(name, lib, api_level, type) if(device_api_level >= api_level) android_funs.name = dlsym(lib, #name);
+	#define DEFINE_VAR(name, lib, api_level, type) if(device_api_level >= api_level) android_funs.name = *(type*)dlsym(lib, #name);
+	#include "android_funs.h"
+	#undef DEFINE_VAR
+	#undef DEFINE_FUN
+	#undef DEFINE_LIB
+
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
 	start_sec = now.tv_sec;
 
 	app = application;
 	activity = application->activity;
 	initAndroidFileReader();
-	KoreAndroidVideoInit();
+	// KoreAndroidVideoInit();
 	KincAndroidKeyboardInit();
 	application->onAppCmd = cmd;
 	application->onInputEvent = input;
 	activity->callbacks->onNativeWindowResized = resize;
-	// #ifndef KORE_VULKAN
-	// 	glContext = ndk_helper::GLContext::GetInstance();
-	// #endif
+
+	// TODO: switch to ASensorManager_getInstanceForPackage for api level >= 26
 	sensorManager = ASensorManager_getInstance();
 	accelerometerSensor = ASensorManager_getDefaultSensor(sensorManager, ASENSOR_TYPE_ACCELEROMETER);
 	gyroSensor = ASensorManager_getDefaultSensor(sensorManager, ASENSOR_TYPE_GYROSCOPE);
@@ -1158,12 +1184,8 @@ void android_main(struct android_app *application) {
 	JNIEnv *env = NULL;
 	(*kinc_android_get_activity()->vm)->AttachCurrentThread(kinc_android_get_activity()->vm, &env, NULL);
 
-	jclass koreMoviePlayerClass = kinc_android_find_class(env, "tech.kinc.KincMoviePlayer");
-	jmethodID updateAll = (*env)->GetStaticMethodID(env, koreMoviePlayerClass, "updateAll", "()V");
-
 	while (!started) {
 		kinc_internal_handle_messages();
-		(*env)->CallStaticVoidMethod(env, koreMoviePlayerClass, updateAll);
 	}
 	(*kinc_android_get_activity()->vm)->DetachCurrentThread(kinc_android_get_activity()->vm);
 	kickstart(0, NULL);

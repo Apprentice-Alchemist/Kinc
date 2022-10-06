@@ -11,6 +11,7 @@
 
 extern kinc_g5_texture_t *vulkanTextures[16];
 extern kinc_g5_render_target_t *vulkanRenderTargets[16];
+extern VkSampler vulkanSamplers[16];
 VkDescriptorSet getDescriptorSet(void);
 bool memory_type_from_properties(uint32_t typeBits, VkFlags requirements_mask, uint32_t *typeIndex);
 void setImageLayout(VkCommandBuffer _buffer, VkImage image, VkImageAspectFlags aspectMask, VkImageLayout oldImageLayout, VkImageLayout newImageLayout);
@@ -844,6 +845,14 @@ void kinc_g5_command_list_set_texture(kinc_g5_command_list_t *list, kinc_g5_text
 
 void kinc_g5_command_list_set_sampler(kinc_g5_command_list_t *list, kinc_g5_texture_unit_t unit, kinc_g5_sampler_t *sampler) {
 	vulkanSamplers[unit.stages[KINC_G5_SHADER_TYPE_FRAGMENT]] = sampler->impl.sampler;
+}
+
+#include <kinc/video.h>
+
+void kinc_g5_command_list_set_video_texture(kinc_g5_command_list_t *list, kinc_g5_texture_unit_t unit, struct kinc_video_texture *texture) {
+	vulkanTextures[unit.stages[KINC_G5_SHADER_TYPE_FRAGMENT]] = &texture->impl.texture;
+	vulkanRenderTargets[unit.stages[KINC_G5_SHADER_TYPE_FRAGMENT]] = NULL;
+	vulkanSamplers[unit.stages[KINC_G5_SHADER_TYPE_FRAGMENT]] = texture->impl.sampler.impl.sampler;
 }
 
 void kinc_g5_command_list_set_image_texture(kinc_g5_command_list_t *list, kinc_g5_texture_unit_t unit, kinc_g5_texture_t *texture) {}

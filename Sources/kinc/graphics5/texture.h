@@ -60,10 +60,6 @@ KINC_FUNC void kinc_g5_texture_init_non_sampled_access(kinc_g5_texture_t *textur
 /// <param name="texture">The texture to destroy</param>
 KINC_FUNC void kinc_g5_texture_destroy(kinc_g5_texture_t *texture);
 
-#ifdef KORE_ANDROID
-KINC_FUNC void kinc_g5_texture_init_from_id(kinc_g5_texture_t *texture, unsigned texid);
-#endif
-
 KINC_FUNC uint8_t *kinc_g5_texture_lock(kinc_g5_texture_t *texture);
 
 KINC_FUNC void kinc_g5_texture_unlock(kinc_g5_texture_t *texture);
