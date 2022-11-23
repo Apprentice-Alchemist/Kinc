@@ -1,3 +1,7 @@
+#include "kinc/graphics4/shader.h"
+#include "kinc/graphics5/rendertarget.h"
+#include "kinc/graphics5/sampler.h"
+#include "kinc/graphics5/textureunit.h"
 #include <kinc/graphics4/graphics.h>
 #include <kinc/graphics5/commandlist.h>
 #include <kinc/graphics5/constantbuffer.h>
@@ -169,7 +173,14 @@ void kinc_g5_command_list_set_fragment_constant_buffer(kinc_g5_command_list_t *l
 }
 
 void kinc_g5_command_list_execute(kinc_g5_command_list_t *list) {
+	static struct tex_state {
+		kinc_g5_sampler_t *sampler;
+		kinc_g5_texture_t *texture;
+	} texture_state[KINC_G4_SHADER_TYPE_COUNT][32];
+
 	kinc_g5_pipeline_t *current_pipeline = NULL;
+
+
 	int index = 0;
 	while (index < list->impl.commandIndex) {
 		READ(command_t, command);
@@ -269,6 +280,8 @@ void kinc_g5_command_list_execute(kinc_g5_command_list_t *list) {
 			break;
 		}
 		case SetSampler: {
+			READ(kinc_g5_texture_unit_t, unit);
+			READ(kinc_g5_sampler_t *, sampler);
 			assert(false);
 			// TODO
 			break;
@@ -292,11 +305,15 @@ void kinc_g5_command_list_execute(kinc_g5_command_list_t *list) {
 			break;
 		}
 		case SetTextureFromRenderTarget: {
+			READ(kinc_g5_texture_unit_t, unit);
+			READ(kinc_g5_render_target_t *, render_target);
 			assert(false);
 			// TODO
 			break;
 		}
 		case SetTextureFromRenderTargetDepth: {
+			READ(kinc_g5_texture_unit_t, unit);
+			READ(kinc_g5_render_target_t *, render_target);
 			assert(false);
 			// TODO
 			break;
@@ -362,15 +379,21 @@ void kinc_g5_command_list_set_texture(kinc_g5_command_list_t *list, kinc_g5_text
 
 void kinc_g5_command_list_set_sampler(kinc_g5_command_list_t *list, kinc_g5_texture_unit_t unit, kinc_g5_sampler_t *sampler) {
 	WRITE(command_t, SetSampler);
+	WRITE(kinc_g5_texture_unit_t, unit);
+	WRITE(kinc_g5_sampler_t *, sampler);
 }
 
 void kinc_g5_command_list_set_texture_from_render_target(kinc_g5_command_list_t *list, kinc_g5_texture_unit_t unit, kinc_g5_render_target_t *render_target) {
 	WRITE(command_t, SetTextureFromRenderTarget);
+	WRITE(kinc_g5_texture_unit_t, unit);
+	WRITE(kinc_g5_render_target_t *, render_target);
 }
 
 void kinc_g5_command_list_set_texture_from_render_target_depth(kinc_g5_command_list_t *list, kinc_g5_texture_unit_t unit,
                                                                kinc_g5_render_target_t *render_target) {
 	WRITE(command_t, SetTextureFromRenderTargetDepth);
+	WRITE(kinc_g5_texture_unit_t, unit);
+	WRITE(kinc_g5_render_target_t *, render_target);
 }
 
 void kinc_g5_command_list_set_image_texture(kinc_g5_command_list_t *list, kinc_g5_texture_unit_t unit, kinc_g5_texture_t *texture) {
